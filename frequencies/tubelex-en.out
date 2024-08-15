@@ -1,0 +1,66 @@
+Cleaning stats:
+* video IDs in the list:
+  120000
+* files:
+  119993 total
+  4399 too short (<3 lines)
+  191 not enough en characters (<0.7 characters of the corresponding charset)
+  9427 not enough detected en (<0.95)
+  105976 valid files after cleaning
+* sequences removed from valid files:
+  25790 tags
+  26470 addresses
+* lines in valid files:
+  18454235 total lines
+  681 whitespace-only lines
+  2536 lines composed of non-en characters
+  18451018 valid lines after cleaning
+* VTT cue cleanup:
+  14733656 total cues
+  22181 empty cues
+  16147 repeated cues
+  98991 scrolling cues
+
+Duplicate (similarity >= 0.95) stats:
+  105976 total
+  224 duplicates removed
+  105752 valid files
+
+[regex]
+Frequency counting stats:
+ 185900 CC descriptions filtered
+ 170816384 tokens counted
+
+Warning: Possible markup "align" found among top 6000 words with frequency 2094.
+Warning: Possible markup "align" found among top 6000 words with frequency 2213, in *-lower.
+Warning: Possible markup "align" found among top 6000 words with frequency 2094, in *-nfkc.
+Warning: Possible markup "align" found among top 6000 words with frequency 2213, in *-nfkc-lower.
+[treebank]
+Frequency counting stats:
+ 185900 CC descriptions filtered
+ 170043134 tokens counted
+
+Warning: Possible markup "align" found among top 6000 words with frequency 2076.
+Warning: Possible markup "align" found among top 6000 words with frequency 2193, in *-lower.
+Warning: Possible markup "align" found among top 6000 words with frequency 2076, in *-nfkc.
+Warning: Possible markup "align" found among top 6000 words with frequency 2193, in *-nfkc-lower.
+--lemma --pos
+[stanza]
+Frequency counting stats:
+ 185900 CC descriptions filtered
+ 170750870 tokens counted
+
+Warning: Possible markup "align" found among top 6000 words with frequency 2085.
+Warning: Possible markup "align" found among top 6000 words with frequency 2204, in *-lower.
+Warning: Possible markup "align" found among top 6000 words with frequency 2085, in *-nfkc.
+Warning: Possible markup "align" found among top 6000 words with frequency 2204, in *-nfkc-lower.
+Frequency counting stats:
+ 185900 CC descriptions filtered
+ 170764637 tokens counted
+
+Warning: Possible markup "align" found among top 6000 words with frequency 4990.
+Warning: Possible markup "align" found among top 6000 words with frequency 5008, in *-lower.
+Warning: Possible markup "ruby" found among top 6000 words with frequency 1412, in *-lower.
+Warning: Possible markup "align" found among top 6000 words with frequency 4990, in *-nfkc.
+Warning: Possible markup "align" found among top 6000 words with frequency 5008, in *-nfkc-lower.
+Warning: Possible markup "ruby" found among top 6000 words with frequency 1412, in *-nfkc-lower.
