@@ -1,0 +1,24 @@
+	English	Japanese	Spanish
+wordfreq	570.0	570.0	593.0
+Wikipedia	570.0	570.0	593.0
+Wikipedia_R	570.0		593.0
+SUBTLEX	570.0		593.0
+SUBTLEX_R	570.0		593.0
+SubIMDB	570.0		
+SubIMDB_R	570.0		
+OpenSubtitles	570.0	570.0	593.0
+GINI	570.0	570.0	
+GINI_R	570.0		
+CSJ		570.0	
+TUBELEX	570.0	570.0	593.0
+TUBELEX\textsubscript{R}	570.0		593.0
+TUBELEX\textsubscript{B}		570.0	
+TUBELEX\textsubscript{L}	570.0	570.0	593.0
+TUBELEX_entertainment	570.0	570.0	593.0
+TUBELEX_entertainment_L	570.0	570.0	593.0
+TUBELEX_entertainment_B		570.0	
+TUBELEX_entertainment_R	570.0		593.0
+TUBELEX_comedy	570.0	570.0	593.0
+TUBELEX_comedy_L	570.0	570.0	593.0
+TUBELEX_comedy_B		570.0	
+TUBELEX_comedy_R	570.0		593.0

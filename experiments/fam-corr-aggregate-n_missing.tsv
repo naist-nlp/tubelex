@@ -1,0 +1,15 @@
+	Chinese	Indonesian
+wordfreq	3.0	100.0
+Wikipedia	347.0	12.0
+Wikipedia_R		12.0
+SUBTLEX	2024.0	
+OpenSubtitles	196.0	7.0
+TUBELEX	635.0	10.0
+TUBELEX\textsubscript{R}		10.0
+TUBELEX\textsubscript{L}		8.0
+TUBELEX_entertainment	2866.0	47.0
+TUBELEX_entertainment_L		34.0
+TUBELEX_entertainment_R		46.0
+TUBELEX_comedy	23111.0	951.0
+TUBELEX_comedy_L		803.0
+TUBELEX_comedy_R		963.0

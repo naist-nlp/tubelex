@@ -1,0 +1,4 @@
+file	language	Pearson's r	MAE	MSE	R2
+spanish_lcp_labels	Spanish	0.6531	0.1291	0.0248	0.2982
+english_lcp_labels	English	0.7571	0.0951	0.0167	0.5467
+japanese_lcp_labels	Japanese	0.5933	0.1476	0.0334	0.2269

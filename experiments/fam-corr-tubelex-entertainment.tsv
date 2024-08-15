@@ -1,0 +1,3 @@
+file	language	correlation	corr_tubelex	n	n_missing
+id	Indonesian	0.6204	0.9552	1490	47
+zh	Chinese	0.4437	0.8666	24325	2866

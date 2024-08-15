@@ -1,0 +1,15 @@
+	Chinese	Indonesian
+wordfreq	0.242	0.5918
+Wikipedia	0.3345	0.4555
+Wikipedia_R		0.4555
+SUBTLEX	0.5049	
+OpenSubtitles	0.4442	0.5818
+TUBELEX	0.5063	0.6246
+TUBELEX\textsubscript{R}		0.6166
+TUBELEX\textsubscript{L}		0.618
+TUBELEX_entertainment	0.4437	0.6204
+TUBELEX_entertainment_L		0.6102
+TUBELEX_entertainment_R		0.6103
+TUBELEX_comedy	0.1371	0.3964
+TUBELEX_comedy_L		0.4448
+TUBELEX_comedy_R		0.3884

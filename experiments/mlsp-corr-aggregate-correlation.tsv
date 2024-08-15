@@ -1,0 +1,24 @@
+	English	Japanese	Spanish
+wordfreq	-0.7472	-0.5979	-0.5513
+Wikipedia	-0.6509	-0.487	-0.4541
+Wikipedia_R	-0.6509		-0.4541
+SUBTLEX	-0.6962		-0.6182
+SUBTLEX_R	-0.6962		-0.6182
+SubIMDB	-0.7174		
+SubIMDB_R	-0.7174		
+OpenSubtitles	-0.7208	-0.1914	-0.628
+GINI	-0.3485	-0.3786	
+GINI_R	-0.3485		
+CSJ		-0.5278	
+TUBELEX	-0.7624	-0.6613	-0.6032
+TUBELEX\textsubscript{R}	-0.7613		-0.5877
+TUBELEX\textsubscript{B}		-0.6577	
+TUBELEX\textsubscript{L}	-0.7487	-0.6216	-0.6501
+TUBELEX_entertainment	-0.7495	-0.6429	-0.6022
+TUBELEX_entertainment_L	-0.7444	-0.5933	-0.6531
+TUBELEX_entertainment_B		-0.6345	
+TUBELEX_entertainment_R	-0.7489		-0.5867
+TUBELEX_comedy	-0.6394	-0.576	-0.5169
+TUBELEX_comedy_L	-0.6572	-0.525	-0.5919
+TUBELEX_comedy_B		-0.5646	
+TUBELEX_comedy_R	-0.6392		-0.5044
