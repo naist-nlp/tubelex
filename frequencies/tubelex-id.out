@@ -1,0 +1,43 @@
+Cleaning stats:
+* video IDs in the list:
+  120000
+* files:
+  116708 total
+  21316 too short (<3 lines)
+  37 not enough id characters (<0.7 characters of the corresponding charset)
+  60537 not enough detected id (<0.95)
+  34818 valid files after cleaning
+* sequences removed from valid files:
+  502 tags
+  4864 addresses
+* lines in valid files:
+  3148557 total lines
+  65 whitespace-only lines
+  159 lines composed of non-id characters
+  3148333 valid lines after cleaning
+* VTT cue cleanup:
+  2676381 total cues
+  13690 empty cues
+  3294 repeated cues
+  30 scrolling cues
+
+Duplicate (similarity >= 0.95) stats:
+  34818 total
+  134 duplicates removed
+  34684 valid files
+
+[regex]
+Frequency counting stats:
+ 22266 CC descriptions filtered
+ 34293878 tokens counted
+
+--lemma --pos
+[stanza]
+Frequency counting stats:
+ 22266 CC descriptions filtered
+ 34903381 tokens counted
+
+Frequency counting stats:
+ 22266 CC descriptions filtered
+ 34904605 tokens counted
+
