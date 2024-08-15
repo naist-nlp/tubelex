@@ -1,0 +1,44 @@
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+
+# development
+config.sh
+*.bbprojectd/
+TODO
+TODO/
+/zz-*/
+/00-*/
+/results-2023-11-19/
+/results-2023-12/
+/clean-*-test*/
+/tubelex-en-V0/
+/tubelex-en-remote/
+/*.ftz
+
+# jtubespeech & tubelex output
+/jtubespeech
+/jtubespeech-subtitles
+/tubelex-ja-channels.tsv
+/*.xz
+/*.zip
+/*.tsv
+/*.out
+/tubelex-frequency-2024-07-15
+/tubelex-frequency-2024-07-23-es
+# Subtitle files in eval samples
+/corpus/*
+
+# SubIMDB data
+/SubIMDB_All_Individual.tar
+/SubIMDB_All_Individual/
+
+# experiments/LCP data
+/data/*
+!/data/subtlex-es.tsv.xz
+!/data/chinese-familiarity.tsv.xz
+!/data/os*.tsv.xz
+!/data/os_README.txt
+/experiments/zz-*

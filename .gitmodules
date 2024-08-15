@@ -1,0 +1,3 @@
+[submodule "jtubespeech-subtitles"]
+	path = jtubespeech-subtitles
+	url = https://github.com/adno/jtubespeech-subtitles
