@@ -11,7 +11,6 @@ from csv import QUOTE_NONE
 import numpy as np
 import wordfreq as wf  # word_frequency, tokenize, get_frequency_dict
 from itertools import chain
-from unicodedata import normalize as unicode_normalize
 
 from sklearn.linear_model import RidgeCV
 from sklearn.metrics import (
@@ -64,7 +63,6 @@ CAT_ID2CATEGORY = {
     'sports': 'Sports',
     'travel': 'Travel & Events'
     }
-
 
 
 def pearson_r(x: np.ndarray, y: np.ndarray):
@@ -211,6 +209,14 @@ def get_subimdb_freq_data() -> FrequencyData:
         )
 
 
+def get_espal_freq_data() -> FrequencyData:
+    return FrequencyData.from_file_url(
+        filename='data/espal.tsv',
+        cols=['word', 'cnt'],
+        total_row=True
+        )
+
+
 LANG2KYTEA_MODEL = {
     'ja': 'data/downloads/kytea/jp-0.4.7-5.mod',
     'zh': 'data/downloads/kytea/lcmc-0.4.0-5.mod'
@@ -331,6 +337,9 @@ def parse_args() -> argparse.Namespace:
         '--subimdb', action='store_true', help='Use SubIMDB for English.'
         )
     parser.add_argument(
+        '--espal', action='store_true', help='Use EsPal for Spanish.'
+        )
+    parser.add_argument(
         '--csj', action='store_true', help=(
             'Use CSJ for Japanese (requires --form lemma).'
             )
@@ -344,6 +353,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--models', default='experiments/models',
                         help='Model directory.')
     parser.add_argument('--verbose', '-v', action='store_true')
+    parser.add_argument(
+        '--log-lookups', help='Log frequency lookups to a file.'
+        )
     add_tokenizer_arg_group(parser)  # calls add_tagger_arg_group(parser)
     parser.add_argument('--token', default=None,
                         help='Hugging Face access token')
@@ -363,7 +375,11 @@ def main(args: argparse.Namespace):
     correlation = args.correlation
     read_gold = train or correlation
     subimdb = args.subimdb
+    espal = args.espal
     csj = args.csj
+    f_lookups = None
+    if args.log_lookups is not None:
+        f_lookups = open(args.log_lookups, 'a')
 
     # Tokenization:
     tokenize_c_j = not args.no_c_j_tokenize
@@ -438,6 +454,10 @@ def main(args: argparse.Namespace):
         assert 'en' not in lang2freq_data
         lang2freq_data['en'] = get_subimdb_freq_data()
 
+    if espal:
+        assert 'es' not in lang2freq_data
+        lang2freq_data['es'] = get_espal_freq_data()
+
     if csj:
         assert 'ja' not in lang2freq_data
         lang2freq_data['ja'] = get_csj_freq_data(
@@ -448,6 +468,7 @@ def main(args: argparse.Namespace):
         args.subtlex, args.opensubtitles, args.tubelex,
         args.wikipedia, args.gini, args.wordfreq,
         ['en'] if subimdb else [],
+        ['es'] if espal else [],
         ['ja'] if csj else [],
         ))
 
@@ -466,7 +487,7 @@ def main(args: argparse.Namespace):
 
         def agg_tubelex_frequency_for_corr(s: str, lang: str) -> float:
             s = nfkc_lower(s)
-            tokens = [t for t in lang2tokenize[lang](s)]
+            tokens = lang2tokenize[lang](s)
             assert tokens, (tokens, lang, s)
             tubelex_for_corr = lang2tubelex_for_corr[lang]
             f = min(
@@ -524,9 +545,17 @@ def main(args: argparse.Namespace):
         return wf_frequency_missing(w, lang, minimum=FREQ_EPS)
 
     def agg_frequency_missing(s: str, lang: str) -> [float, bool]:
-        s = nfkc_lower(s)
+        s_norm = nfkc_lower(s)
+        if f_lookups is not None:
+            print(f'lookup\t{s}', file=f_lookups)
+            print(f'normalized\t{s_norm}', file=f_lookups)
+        s = s_norm
         is_gini = lang in lang2gini_func
-        fs, ms = zip(*(frequency_missing(w, lang) for w in tokenize(s, lang)))
+        tokens = tokenize(s, lang)
+        if f_lookups is not None:
+            for i, t in enumerate(tokens):
+                print(f'token_{i}\t{t}', file=f_lookups)
+        fs, ms = zip(*(frequency_missing(t, lang) for t in tokens))
         (f, m) = (
             max(fs) if is_gini else min(fs),
             any(ms)
@@ -685,6 +714,8 @@ def main(args: argparse.Namespace):
 
         if fo is not None:
             fo.close()
+    if f_lookups:
+        f_lookups.close()
 
 
 if __name__ == '__main__':

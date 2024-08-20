@@ -6,5 +6,5 @@
 #SBATCH -t 100:00:00
 #SBATCH -c 96
 
-mkdir -p fasttext
-fasttext skipgram -input corpus/tokenized-zh.txt -output fasttext/tubelex-zh -thread 96
+source make-fasttext-config.sh "$1"
+fasttext $params -input corpus/tokenized-zh.txt -output "fasttext/tubelex-zh-$variant" -thread 96

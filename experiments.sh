@@ -65,6 +65,11 @@ python experiments/run.py --os es en ja --train   --mlsp $all
 python experiments/run.py --os es en ja --metrics --mlsp $all > experiments/mlsp-results-os.tsv
 python experiments/run.py --os es en ja --corr    --mlsp $all > experiments/mlsp-corr-os.tsv
 
+echo espal
+python experiments/run.py --espal --train   --mlsp spanish_lcp_labels
+python experiments/run.py --espal --metrics --mlsp spanish_lcp_labels > experiments/mlsp-results-espal.tsv
+python experiments/run.py --espal --corr    --mlsp spanish_lcp_labels > experiments/mlsp-corr-espal.tsv
+
 
 for variant in '' -regex
 do
@@ -178,6 +183,9 @@ echo "gini"
 python experiments/run.py --minus --gini en                              --corr --ldt en       > experiments/ldt-corr-gini.tsv
 echo "subimdb"
 python experiments/run.py --subimdb 				                     --corr --ldt en       > experiments/ldt-corr-subimdb.tsv
+echo "espal"
+python experiments/run.py --espal 										 --corr --ldt es > experiments/ldt-corr-espal.tsv
+
 
 echo
 echo '==========='

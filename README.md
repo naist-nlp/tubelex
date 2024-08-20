@@ -160,4 +160,19 @@ To replicate our experiments you will need the following files placed in the dat
 
     ```python tubelex.py --lang en -x --frequencies --tokenized-files SubIMDB_All_Individual/subtitles -o data/subimdb.tsv```
 
+- `espal.tsv` file created by following these steps:
+	1. Go to the [EsPal website](https://www.bcbl.eu/databases/espal/).
+	2. Select "Subtitle Tokens (2012-10-05)". (Phonology doesn't matter.)
+	3. Click "Words to Properties".
+	4. Select "Word Frequency" > "Count"
+	5. For N in 1...5 repeat steps 6 to 8:
+	6. - Click "File with Items: Choose File" and select the file `data/es-words.`*N*`.txt`.
+	7. - Click "Download"
+	8. - Click "Search Again..."
+	9. Remove UTF-8 BOM (bytes 0xEFBBBF) from each file, and the header line `word\tcnt` from each file except the first one.
+	10. Concatenate the edited files to `data/espal.txt`.
+	11. Remove lines not containing any count.
+	11. Add `[TOTAL]\t462611693` as the last line (`\t` is the tab character).
 We use a number of other files (e.g. SPALEX, Wikipedia frequencies, SUBTLEX-US, SUBTLEX-ESP), which are either included or downloaded automatically.
+	12. Remove trailing tabs from all lines.
+	13. The resulting file should have 35285 lines and 448608 bytes.
