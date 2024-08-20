@@ -15,6 +15,7 @@ VALID_CORPORA = {
     'OpenSubtitles': 'os',
     'GINI': 'gini',
     'CSJ': 'csj-lemma',
+    'ACTIV-ES': 'activ-es',
     'EsPal': 'espal',
     'TUBELEX': 'tubelex',
     'TUBELEX\\textsubscript{R}': 'tubelex-regex',

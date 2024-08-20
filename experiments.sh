@@ -70,6 +70,11 @@ python experiments/run.py --espal --train   --mlsp spanish_lcp_labels
 python experiments/run.py --espal --metrics --mlsp spanish_lcp_labels > experiments/mlsp-results-espal.tsv
 python experiments/run.py --espal --corr    --mlsp spanish_lcp_labels > experiments/mlsp-corr-espal.tsv
 
+echo activ-es
+python experiments/run.py --activ-es --train   --mlsp spanish_lcp_labels
+python experiments/run.py --activ-es --metrics --mlsp spanish_lcp_labels > experiments/mlsp-results-activ-es.tsv
+python experiments/run.py --activ-es --corr    --mlsp spanish_lcp_labels > experiments/mlsp-corr-activ-es.tsv
+
 
 for variant in '' -regex
 do
@@ -184,7 +189,10 @@ python experiments/run.py --minus --gini en                              --corr 
 echo "subimdb"
 python experiments/run.py --subimdb 				                     --corr --ldt en       > experiments/ldt-corr-subimdb.tsv
 echo "espal"
-python experiments/run.py --espal 										 --corr --ldt es > experiments/ldt-corr-espal.tsv
+python experiments/run.py --espal 										 --corr --ldt es > 
+echo "activ-es"
+python experiments/run.py --activ-es 									 --corr --ldt es > experiments/ldt-corr-activ-es.tsv
+
 
 
 echo

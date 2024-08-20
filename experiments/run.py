@@ -77,19 +77,41 @@ def get_wiki_freq_data(language: str) -> FrequencyData:
     return FrequencyData.from_wiki(language)
 
 
-def get_gini_func_missing(language: str) -> Callable[[str], tuple[float, bool]]:
+def get_gini_missing_func(language: str) -> Callable[[str], tuple[float, bool]]:
     df = pd.read_csv(f'data/GINI_{language}.csv', na_filter=False, quoting=QUOTE_NONE)
     gini = df.set_index('Word')['GINI']
     max_gini = gini.max()
 
-    def gini_func_missing(word: str) -> tuple[float, bool]:
+    def gini_missing_func(word: str) -> tuple[float, bool]:
         g = gini.get(word)
         return (
             (max_gini, True) if (g is None) else
             (g, False)
             )
 
-    return gini_func_missing
+    return gini_missing_func
+
+
+ACTIV_ES_PATH = 'data/downloads/activ-es.csv'
+
+
+def get_activ_es_freq_missing_func() -> Callable[[str], tuple[float, bool]]:
+    download_if_necessary(
+        'https://github.com/francojc/activ-es/raw/master/activ-es-v.02/'
+        'wordlists/plain/aes1grams.csv', ACTIV_ES_PATH
+        )
+    df      = pd.read_csv(ACTIV_ES_PATH, index_col='word')
+    freq    = df['aes_orf'] / 100_000
+    min_freq = freq.min()
+
+    def activ_es_freq_missing_func(word: str) -> tuple[float, bool]:
+        f = freq.get(word)
+        return (
+            (min_freq, True) if (f is None) else
+            (f, False)
+            )
+
+    return activ_es_freq_missing_func
 
 
 def get_ldt_data(language: str, prefer_zscore: bool = False) -> pd.Series:
@@ -340,6 +362,9 @@ def parse_args() -> argparse.Namespace:
         '--espal', action='store_true', help='Use EsPal for Spanish.'
         )
     parser.add_argument(
+        '--activ-es', action='store_true', help='Use ACTIV-ES for Spanish.'
+        )
+    parser.add_argument(
         '--csj', action='store_true', help=(
             'Use CSJ for Japanese (requires --form lemma).'
             )
@@ -421,6 +446,7 @@ def main(args: argparse.Namespace):
 
     lang2freq_data = {}
     lang2gini_func = {}
+    activ_es_func = None
 
     for lang in args.subtlex:
         lang2freq_data[lang] = get_sub_freq_data(lang)
@@ -435,6 +461,8 @@ def main(args: argparse.Namespace):
         # OpenSubtitles, SubIMDB use something more advanced (similar to Stanza)
         if lang not in ('zh', 'ja'):
             lang2corpus_specific_tokenizer[lang] = get_re_split().split
+    if args.activ_es:
+        lang2corpus_specific_tokenizer['es'] = get_re_split().split
 
     assert not args.category or args.tubelex, '--category requires --tubelex'
     for lang in args.tubelex:
@@ -448,7 +476,7 @@ def main(args: argparse.Namespace):
         lang2freq_data[lang] = get_wiki_freq_data(lang)
 
     for lang in args.gini:
-        lang2gini_func[lang] = get_gini_func_missing(lang)
+        lang2gini_func[lang] = get_gini_missing_func(lang)
 
     if subimdb:
         assert 'en' not in lang2freq_data
@@ -457,6 +485,10 @@ def main(args: argparse.Namespace):
     if espal:
         assert 'es' not in lang2freq_data
         lang2freq_data['es'] = get_espal_freq_data()
+
+    if args.activ_es:
+        assert 'es' not in lang2freq_data
+        activ_es_func = get_activ_es_freq_missing_func()
 
     if csj:
         assert 'ja' not in lang2freq_data
@@ -468,7 +500,7 @@ def main(args: argparse.Namespace):
         args.subtlex, args.opensubtitles, args.tubelex,
         args.wikipedia, args.gini, args.wordfreq,
         ['en'] if subimdb else [],
-        ['es'] if espal else [],
+        ['es'] if (espal or activ_es_func is not None) else [],
         ['ja'] if csj else [],
         ))
 
@@ -533,13 +565,10 @@ def main(args: argparse.Namespace):
             return (f, False) if (f is not None) else (minimum, True)
 
     def frequency_missing(w: str, lang: str) -> [float, bool]:
-        if (
-            gini_func_missing := lang2gini_func.get(lang)
-            ) is not None:
-            return gini_func_missing(w)
-        if (
-            freq_data := lang2freq_data.get(lang)
-            ) is not None:
+        if (frequency_missing_func := (activ_es_func if lang == 'es' else
+                                       lang2gini_func.get(lang))) is not None:
+            return frequency_missing_func(w)
+        if (freq_data := lang2freq_data.get(lang)) is not None:
             return freq_data.smooth_frequency_missing(w)
         # We cannot smooth frequencies from wordfreq, so we use minimum instead:
         return wf_frequency_missing(w, lang, minimum=FREQ_EPS)

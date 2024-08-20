@@ -20,6 +20,7 @@ CORPUS2ID = {
     'GINI': 'gini',
     'GINI_R': 'gini-regex',
     'CSJ': 'csj-lemma',
+    'ACTIV-ES': 'activ-es',
     'EsPal': 'espal',
     'TUBELEX': 'tubelex',
     'TUBELEX\\textsubscript{R}': 'tubelex-regex',
