@@ -6,5 +6,5 @@
 #SBATCH -t 100:00:00
 #SBATCH -c 96
 
-mkdir -p fasttext
-fasttext skipgram -input corpus/tokenized-es.txt -output fasttext/tubelex-es -thread 96
+source make-fasttext-config.sh "$1"
+fasttext $params -input corpus/tokenized-es.txt -output "fasttext/tubelex-es-$variant" -thread 96
