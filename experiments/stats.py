@@ -1,134 +1,137 @@
+import argparse
+from os import listdir
+import os
+import re
+import sys
+from csv import QUOTE_NONE
 from collections import defaultdict
 import pandas as pd
-import numpy as np
-import os
-import sys
-from corrstats import dependent_corr
 
+HEADING_IDS     = '* video IDs in the list:\n'
+KEY_IDS         = 'ids'
 
-TUBELEX = 'TUBELEX'
-CORPUS2ID = {
-    'wordfreq': 'wordfreq',
-    'wordfreq_R': 'wordfreq-regex',
-    'Wikipedia': 'wiki',
-    'Wikipedia_R': 'wiki-regex',
-    'SUBTLEX': 'subtlex',
-    'SUBTLEX_R': 'subtlex-regex',
-    'SubIMDB': 'subimdb',
-    'SubIMDB_R': 'subimdb-regex',
-    'OpenSubtitles': 'os',
-    'GINI': 'gini',
-    'GINI_R': 'gini-regex',
-    'CSJ': 'csj-lemma',
-    'TUBELEX': 'tubelex',
-    'TUBELEX\\textsubscript{R}': 'tubelex-regex',
-    'TUBELEX\\textsubscript{B}': 'tubelex-base',
-    'TUBELEX\\textsubscript{L}': 'tubelex-lemma',
-    'TUBELEX_entertainment': 'tubelex-entertainment',
-    'TUBELEX_entertainment_L': 'tubelex-entertainment-lemma',
-    'TUBELEX_entertainment_B': 'tubelex-entertainment-base',
-    'TUBELEX_entertainment_R': 'tubelex-entertainment-regex',
-    'TUBELEX_comedy': 'tubelex-comedy',
-    'TUBELEX_comedy_L': 'tubelex-comedy-lemma',
-    'TUBELEX_comedy_B': 'tubelex-comedy-base',
-    'TUBELEX_comedy_R': 'tubelex-comedy-regex',
+KEY2DESC_RE = {
+    # ids are listed like this after `HEADING_IDS`:
+    # * video IDs in the list:
+    #   120000
+    KEY_IDS: r'',
+    # We do not need to check the following headings:
+    # * files:
+    'files': r'total',
+    'files_short': r'too short .*',
+    'files_little_chars': r'not enough [a-z]+ characters .*',
+    'files_little_lang': r'not enough detected .*',
+    'files_valid': r'valid files after cleaning',
+    # * sequences removed from valid files:
+    'rm_tags': r'tags',
+    'rm_addresses': r'addresses',
+    # * lines in valid files:
+    'lines': r'total lines',
+    'lines_ws': r'whitespace-only lines',
+    'lines_no_chars': r'lines composed of non-[a-z]+ characters',
+    'lines_valid': r'valid lines after cleaning',
+    # * VTT cue cleanup:
+    'cues': r'total cues',
+    'cues_empty': r'empty cues',
+    'cues_repeated': r'repeated cues',
+    'cues_scrolling': r'scrolling cues',
+    # ignore the 2nd 'total' (in the "duplicate" section  == 'files_valid' above)
+    'dedup_removed': r'duplicates removed',
+    'dedup_valid': r'valid files',
+    'cc_descriptions': r'CC descriptions filtered'
     }
 
-TASK2NAME = {
-    'ldt': 'Decision Time',
-    'fam': 'Familiarity',
-    'mlsp': 'Complexity',
-    }
+VALUE_DESC_RE = r'  ?(?P<value>[0-9]+)( (?P<desc>.+))?\n'
 
 
-def dependent_corr_pvalue_or_nan(
-    xy, xz, yz, n, twotailed=True, conf_level=0.95, method='steiger'
-    ) -> float:
-    if np.isnan(xy) or np.isnan(xz) or np.isnan(yz) or np.isnan(n):
-        return np.nan
-    if (xy == xz) and (yz == 1):
-        return np.nan
-    p = dependent_corr(
-        xy, xz, yz, n, twotailed=twotailed, conf_level=conf_level, method=method
-        )[1]
-    if np.isnan(p):
-        # Technical/numerical thing: sometimes we get nans for very similar
-        # correlation, we want to differentiate it from exactly the same correlation
-        # and nan inputs above
-        return 1
-    return p
+def tubelex_out2dict(
+    path: str, d: dict[str, int] | None = None
+    ) -> dict[str, int]:
+    if d is None:
+        d = {}
+    with open(path) as f:
+        after_heading_ids: bool = False
+        for line in f:
+            if (m := re.fullmatch(VALUE_DESC_RE, line)):
+                value = int(m.group('value'))
+                desc = m.group('desc') or ''    # may be None -> ''
+                for key, desc_re in KEY2DESC_RE.items():
+                    if key == KEY_IDS and not after_heading_ids:
+                        continue
+                    if re.fullmatch(desc_re, desc):
+                        if key not in d:
+                            d[key] = value
+                        break
+                after_heading_ids = False
+            else:
+                after_heading_ids = (line == HEADING_IDS)
+    if (missing := set(KEY2DESC_RE).difference(d)):
+        raise Exception(f'Items {missing} are missing in TUBELEX output {path}')
+    return d
 
 
-def main():
-    task_name2df = {}
-    task_name2df_p = {}
-    for filename, cols, add_mlsp, task in (
-        ('experiments/mlsp-results', ['R2'], True, None),
-        *((
-            f'experiments/{task}-corr',
-            ['correlation', 'corr_tubelex', 'n', 'n_missing'],
-            False,
-            task
-            ) for task in ('ldt', 'fam', 'mlsp'))
-            # Exclude 'ldtz' (LDT z-scores) : we have z-scores only for en and zh, and
-            # the results are basically the same as for means ('ldt').
+TUBELEX_OUT_RE = r'tubelex-(?P<lang>[a-z]+)\.out'
+TUBELEX_FREQ_RE = r'tubelex-(?P<lang>[a-z]+)(-(?P<id>[a-z-]+))?-nfkc-lower\.tsv\.xz'
+TOTAL_ROW = '[TOTAL]'
+
+
+def tubelex_freq2dict(
+    path: str,
+    freq_id: str,
+    d: dict[str, int] | None = None
+    ) -> dict[str, int]:
+    if d is None:
+        d = {}
+    df = pd.read_table(
+        path, quoting=QUOTE_NONE, usecols=['word', 'count'], index_col='word'
+        )
+    c = df['count']
+    total = c[TOTAL_ROW]
+    c.drop(TOTAL_ROW, inplace=True)
+    n_tokens = c.sum()
+    assert n_tokens == total
+    d[f'{freq_id}:types']   = len(c)
+    d[f'{freq_id}:tokens']  = n_tokens
+    return d
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser()
+    action = parser.add_mutually_exclusive_group()
+    action.add_argument('--frequencies', default='frequencies',
+                        help='Tubelex frequencies directory (input)')
+    action.add_argument('--output', '-o', default='experiments/stats.csv',
+                        help='Stats output file (CSV)')
+    return parser.parse_args()
+
+
+def main(args: argparse.Namespace):
+    path    = args.frequencies
+
+    lang2d = defaultdict(dict)
+
+    for name in sorted(
+        # Process .out files first => nicer column ordering:
+        listdir(path), key=(lambda name: not name.endswith('.out'))
         ):
 
-        d = defaultdict(dict)
+        p = os.path.join(path, name)
+        if not os.path.isfile(p):
+            continue
 
-        for corpus, corpus_id in CORPUS2ID.items():
-            path = f'{filename}-{corpus_id}.tsv'
-            if os.path.exists(path):
-                print(f'Reading {path}')
-                df = pd.read_table(path, index_col='language')
-                for col in cols:
-                    d[col][corpus] = df[col]
+        if (m := re.fullmatch(TUBELEX_OUT_RE, name)) is not None:
+            tubelex_out2dict(p, lang2d[m.group('lang')])
+        elif (m := re.fullmatch(TUBELEX_FREQ_RE, name)) is not None:
+            print(f'Processing frequencies: {name}...', file=sys.stderr)
+            freq_id = (m.group('id') or 'default').replace('-', '_')
+            tubelex_freq2dict(p, freq_id, lang2d[m.group('lang')])
 
-        if add_mlsp:
-            print(f'Reading MLSP shared task data')
-            mlsp = pd.read_table(f'{filename}-shared-task.tsv', index_col='language')
-            for c in ('Archaelogy (ID=2)', 'TMU-HIT (ID=2)'):
-                d['R2'][c] = mlsp[c]
-
-        combined_dfs = {}
-
-        for col, data_dict in d.items():
-            combined = pd.DataFrame(data_dict).transpose()
-            combined.to_csv(f'{filename}-aggregate-{col}.tsv', sep='\t')
-            combined_dfs[col] = combined
-
-        if 'correlation' in cols:
-            r_task_corp     = combined_dfs['correlation']
-            r_task_tubelex  = r_task_corp.loc[TUBELEX]
-            r_corp_tubelex  = combined_dfs['corr_tubelex']
-            ns              = combined_dfs['n']
-            d_pvalues       = {}
-            for lang, rxt in r_task_tubelex.items():
-                # rxt is a single number
-                lang_r_task_corp    = r_task_corp[lang]
-                lang_r_corp_tubelex = r_corp_tubelex[lang]
-                lang_n              = ns[lang]
-                d_pvalues[lang] = [
-                    dependent_corr_pvalue_or_nan(rxc, rxt, rct, n)
-                    for rxc, rct, n
-                    in zip(lang_r_task_corp, lang_r_corp_tubelex, lang_n)
-                    ]
-            df_pvalues = pd.DataFrame(d_pvalues, index=r_task_corp.index)
-            df_pvalues.to_csv(f'{filename}-aggregate-pvalues.tsv', sep='\t',
-                              float_format='%4f')
-
-            task_name = TASK2NAME[task]
-            task_name2df[task_name] = combined_dfs['correlation']
-            task_name2df_p[task_name] = df_pvalues
-
-    df = pd.concat(task_name2df.values(), axis=1, keys=task_name2df.keys())
-    df_p = pd.concat(task_name2df_p.values(), axis=1, keys=task_name2df_p.keys())
-
-    df.to_csv(f'all-aggregate-correlation.tsv', sep='\t',
-                      float_format='%4f')
-    df_pvalues.to_csv(f'all-aggregate-pvalues.tsv', sep='\t',
-                      float_format='%4f')
+    df = pd.DataFrame(lang2d).transpose()       # rows = languages
+    df.index.name = 'lang'
+    df.to_csv(args.output, float_format='%d')   # prevent .0 floats
+    print('Done.', file=sys.stderr)
 
 
 if __name__ == '__main__':
-    main()
+    args = parse_args()
+    main(args)
