@@ -5,7 +5,7 @@ from pandas.io.formats.style import Styler  # type: ignore
 from pandas.io.formats.style_render import Subset
 
 RESULT_PREC = 3
-RESULT_TOL = 0.0001  # We use at most 3 decimal places, so it's appropriate
+RESULT_TOL = 0.00001  # We use 4 decimal places in the original data
 
 VALID_CORPORA = {
     'Wikipedia': 'wiki',
@@ -18,9 +18,9 @@ VALID_CORPORA = {
     'ACTIV-ES': 'activ-es',
     'EsPal': 'espal',
     'TUBELEX': 'tubelex',
-    'TUBELEX\\textsubscript{R}': 'tubelex-regex',
-    'TUBELEX\\textsubscript{B}': 'tubelex-base',
-    'TUBELEX\\textsubscript{L}': 'tubelex-lemma',
+    'TUBELEX\\textsubscript{regex}': 'tubelex-regex',
+    'TUBELEX\\textsubscript{base}': 'tubelex-base',
+    'TUBELEX\\textsubscript{lemma}': 'tubelex-lemma',
     }
 
 

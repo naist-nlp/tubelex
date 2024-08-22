@@ -150,6 +150,17 @@ def get_familiarity_data(language: str) -> pd.Series:
         df = pd.read_csv('data/indonesian-subjective-frequency.csv.xz')
         df = df[~df[fam_col].isna()]    # removes comments
         series = df.set_index('Words (Indonesian)')[fam_col]
+    elif language == 'ja':
+        df = pd.read_csv('data/Lexeed.txt',
+                         header=None, names=range(1, 37), # Readme_Lexeed.txt numbering
+                         encoding='sjis'
+                         )
+        # Take only the first orthography from "6: 見出し語表記", e.g.
+        # 会う・遇う/会う/逢う/會う/遇う, or つかむ/攫む/掴む or 浸かる・漬かる
+        df.set_index(df[6].str.partition('・')[0].str.partition('/')[0], inplace=True)
+        # Mean familiarity is recorded separately for each word sense
+        # in "35:語義別単語親密度の平均値", we take the most familiar sense's value:
+        series = df.groupby(level=0)[35].max()
     else:
         raise Exception(f'No familiarity data for {language}')
 
@@ -520,11 +531,11 @@ def main(args: argparse.Namespace):
         def agg_tubelex_frequency_for_corr(s: str, lang: str) -> float:
             s = nfkc_lower(s)
             tokens = lang2tokenize[lang](s)
-            assert tokens, (tokens, lang, s)
             tubelex_for_corr = lang2tubelex_for_corr[lang]
             f = min(
-                tubelex_for_corr.smooth_frequency_missing(t)[0]  # only frequency
-                for t in tokens
+                (tubelex_for_corr.smooth_frequency_missing(t)[0]  # only frequency
+                 for t in tokens),
+                default=0   # Accept empty tokens => return f1
                 )
 
             # Without tokenization:
@@ -584,9 +595,13 @@ def main(args: argparse.Namespace):
         if f_lookups is not None:
             for i, t in enumerate(tokens):
                 print(f'token_{i}\t{t}', file=f_lookups)
-        fs, ms = zip(*(frequency_missing(t, lang) for t in tokens))
+        fs, ms = (
+            zip(*(frequency_missing(t, lang) for t in tokens)) if tokens else
+            ((), ())
+            )
         (f, m) = (
-            max(fs) if is_gini else min(fs),
+            # Accept empty tokens => return f1
+            max(fs, default=np.inf) if is_gini else min(fs, default=0),
             any(ms)
             )
 

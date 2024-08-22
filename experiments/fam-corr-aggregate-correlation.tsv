@@ -1,15 +1,19 @@
-	Chinese	Indonesian
-wordfreq	0.242	0.5918
-Wikipedia	0.3345	0.4555
-Wikipedia_R		0.4555
-SUBTLEX	0.5049	
-OpenSubtitles	0.4442	0.5818
-TUBELEX	0.5063	0.6246
-TUBELEX\textsubscript{R}		0.6166
-TUBELEX\textsubscript{L}		0.618
-TUBELEX_entertainment	0.4437	0.6204
-TUBELEX_entertainment_L		0.6102
-TUBELEX_entertainment_R		0.6103
-TUBELEX_comedy	0.1371	0.3964
-TUBELEX_comedy_L		0.4448
-TUBELEX_comedy_R		0.3884
+	Chinese	Indonesian	Japanese
+wordfreq	0.242	0.5918	0.2392
+Wikipedia	0.3345	0.4555	0.0863
+Wikipedia_R		0.4555	
+SUBTLEX	0.5049		
+OpenSubtitles	0.4442	0.5818	0.1325
+CSJ			0.2358
+TUBELEX	0.5063	0.6246	0.2419
+TUBELEX\textsubscript{regex}		0.6166	
+TUBELEX\textsubscript{base}			0.2513
+TUBELEX\textsubscript{lemma}		0.618	0.2692
+TUBELEX_entertainment	0.4437	0.6204	0.2761
+TUBELEX_entertainment_L		0.6102	0.2973
+TUBELEX_entertainment_B			0.2857
+TUBELEX_entertainment_R		0.6103	
+TUBELEX_comedy	0.1371	0.3964	0.2632
+TUBELEX_comedy_L		0.4448	0.2702
+TUBELEX_comedy_B			0.2713
+TUBELEX_comedy_R		0.3884	

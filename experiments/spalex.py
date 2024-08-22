@@ -25,7 +25,7 @@ def get_spalex(redo=False):
             SPALEX_LEXICAL, na_values=['', 'NA'], keep_default_na=False
             )
 
-        # Compute mean RT for words (exclude non-words) and incorrect trials:
+        # Compute mean RT for words (exclude non-words) including incorrect trials:
         print('Computing mean RT', file=sys.stderr)
         is_w = (lexical['lexicality']=='W')
         lexical = lexical.loc[is_w, ['spelling', 'rt']]

@@ -10,8 +10,8 @@ GINI		38130.0
 ACTIV-ES			45190.0
 EsPal			45190.0
 TUBELEX	12576.0	38130.0	45190.0
-TUBELEX\textsubscript{R}		38130.0	45190.0
-TUBELEX\textsubscript{L}		38130.0	45190.0
+TUBELEX\textsubscript{regex}		38130.0	45190.0
+TUBELEX\textsubscript{lemma}		38130.0	45190.0
 TUBELEX_entertainment	12576.0	38130.0	45190.0
 TUBELEX_entertainment_L		38130.0	45190.0
 TUBELEX_entertainment_R		38130.0	45190.0

@@ -42,6 +42,7 @@ tubelex-*-removed-addresses.tsv
 /data/downloads/*
 !/data/subtlex-es.tsv.xz
 !/data/chinese-familiarity.tsv.xz
+!/data/indonesian-subjective-frequency.csv.xz
 !/data/os*.tsv.xz
 !/data/os_README.txt
 !/data/es-words.*.txt

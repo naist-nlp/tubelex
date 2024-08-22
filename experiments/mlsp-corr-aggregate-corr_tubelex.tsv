@@ -13,9 +13,9 @@ CSJ		0.5296
 ACTIV-ES			0.7651
 EsPal			0.8881
 TUBELEX	1.0	1.0	1.0
-TUBELEX\textsubscript{R}	0.9999		1.0
-TUBELEX\textsubscript{B}		0.9332	
-TUBELEX\textsubscript{L}	0.9848	0.5213	0.9587
+TUBELEX\textsubscript{regex}	0.9999		1.0
+TUBELEX\textsubscript{base}		0.9332	
+TUBELEX\textsubscript{lemma}	0.9848	0.5213	0.9587
 TUBELEX_entertainment	0.9438	0.9716	0.9789
 TUBELEX_entertainment_L	0.9411	0.5159	0.9406
 TUBELEX_entertainment_B		0.9018	

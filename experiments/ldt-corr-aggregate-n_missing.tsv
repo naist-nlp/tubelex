@@ -10,8 +10,8 @@ GINI		16915.0
 ACTIV-ES			28496.0
 EsPal			10449.0
 TUBELEX	373.0	1175.0	8831.0
-TUBELEX\textsubscript{R}		1172.0	8911.0
-TUBELEX\textsubscript{L}		1016.0	7270.0
+TUBELEX\textsubscript{regex}		1172.0	8911.0
+TUBELEX\textsubscript{lemma}		1016.0	7270.0
 TUBELEX_entertainment	1533.0	4756.0	16106.0
 TUBELEX_entertainment_L		3870.0	13955.0
 TUBELEX_entertainment_R		4740.0	16202.0

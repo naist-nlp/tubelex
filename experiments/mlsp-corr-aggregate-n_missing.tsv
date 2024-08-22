@@ -13,9 +13,9 @@ CSJ		57.0
 ACTIV-ES			128.0
 EsPal			13.0
 TUBELEX	8.0	0.0	5.0
-TUBELEX\textsubscript{R}	7.0		5.0
-TUBELEX\textsubscript{B}		0.0	
-TUBELEX\textsubscript{L}	8.0	0.0	3.0
+TUBELEX\textsubscript{regex}	7.0		5.0
+TUBELEX\textsubscript{base}		0.0	
+TUBELEX\textsubscript{lemma}	8.0	0.0	3.0
 TUBELEX_entertainment	34.0	9.0	11.0
 TUBELEX_entertainment_L	32.0	3.0	7.0
 TUBELEX_entertainment_B		6.0	

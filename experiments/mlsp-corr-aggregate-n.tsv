@@ -13,9 +13,9 @@ CSJ		570.0
 ACTIV-ES			593.0
 EsPal			593.0
 TUBELEX	570.0	570.0	593.0
-TUBELEX\textsubscript{R}	570.0		593.0
-TUBELEX\textsubscript{B}		570.0	
-TUBELEX\textsubscript{L}	570.0	570.0	593.0
+TUBELEX\textsubscript{regex}	570.0		593.0
+TUBELEX\textsubscript{base}		570.0	
+TUBELEX\textsubscript{lemma}	570.0	570.0	593.0
 TUBELEX_entertainment	570.0	570.0	593.0
 TUBELEX_entertainment_L	570.0	570.0	593.0
 TUBELEX_entertainment_B		570.0	

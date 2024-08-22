@@ -10,8 +10,8 @@ GINI		-0.4204
 ACTIV-ES			-0.5997
 EsPal			-0.8069
 TUBELEX	-0.5746	-0.6274	-0.8086
-TUBELEX\textsubscript{R}		-0.6274	-0.8114
-TUBELEX\textsubscript{L}		-0.6238	-0.8079
+TUBELEX\textsubscript{regex}		-0.6274	-0.8114
+TUBELEX\textsubscript{lemma}		-0.6238	-0.8079
 TUBELEX_entertainment	-0.4984	-0.6335	-0.7881
 TUBELEX_entertainment_L		-0.6332	-0.7942
 TUBELEX_entertainment_R		-0.6337	-0.791
