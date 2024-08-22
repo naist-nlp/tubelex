@@ -150,6 +150,16 @@ def get_familiarity_data(language: str) -> pd.Series:
         df = pd.read_csv('data/indonesian-subjective-frequency.csv.xz')
         df = df[~df[fam_col].isna()]    # removes comments
         series = df.set_index('Words (Indonesian)')[fam_col]
+    elif language == 'en':
+        fam_col = "FAM"
+        df = pd.read_csv('data/mrc.csv')
+        df = df[~df[fam_col].isna()]    # removes N/A values
+        series = df.set_index('WORD')[fam_col]
+    elif language == 'es':
+        fam_col = "Fam"
+        df = pd.read_csv('data/es-moreno-martinez.csv')
+        df = df[~df[fam_col].isna()]    # removes N/A values
+        series = df.set_index('Spanish')[fam_col]
     elif language == 'ja':
         df = pd.read_csv('data/Lexeed.txt',
                          header=None, names=range(1, 37), # Readme_Lexeed.txt numbering

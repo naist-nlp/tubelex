@@ -46,6 +46,8 @@ tubelex-*-removed-addresses.tsv
 !/data/os*.tsv.xz
 !/data/os_README.txt
 !/data/es-words.*.txt
+!/data/mrc.csv
+!/data/mrc_README.txt
 /experiments/zz-*
 
 # large files
