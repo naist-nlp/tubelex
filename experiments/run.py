@@ -155,9 +155,9 @@ def get_familiarity_data(language: str) -> pd.Series:
                          header=None, names=range(1, 37), # Readme_Lexeed.txt numbering
                          encoding='sjis'
                          )
-        # Take only the first orthography from "6: 見出し語表記", e.g.
-        # 会う・遇う/会う/逢う/會う/遇う, or つかむ/攫む/掴む or 浸かる・漬かる
-        df.set_index(df[6].str.partition('・')[0].str.partition('/')[0], inplace=True)
+        # Take only the first orthography from "32:語義別表記", e.g.
+        # 会う/遇う/逢う, ガキ・餓鬼, or いましめる・戒める/警める
+        df.set_index(df[32].str.partition('・')[0].str.partition('/')[0], inplace=True)
         # Mean familiarity is recorded separately for each word sense
         # in "35:語義別単語親密度の平均値", we take the most familiar sense's value:
         series = df.groupby(level=0)[35].max()

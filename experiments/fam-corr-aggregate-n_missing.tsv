@@ -1,19 +1,19 @@
 	Chinese	Indonesian	Japanese
-wordfreq	3.0	100.0	485.0
-Wikipedia	347.0	12.0	410.0
+wordfreq	3.0	100.0	489.0
+Wikipedia	347.0	12.0	441.0
 Wikipedia_R		12.0	
 SUBTLEX	2024.0		
-OpenSubtitles	196.0	7.0	12256.0
-CSJ			5301.0
-TUBELEX	635.0	10.0	277.0
+OpenSubtitles	196.0	7.0	12809.0
+CSJ			5327.0
+TUBELEX	635.0	10.0	286.0
 TUBELEX\textsubscript{regex}		10.0	
-TUBELEX\textsubscript{base}			152.0
-TUBELEX\textsubscript{lemma}		8.0	361.0
-TUBELEX_entertainment	2866.0	47.0	1196.0
-TUBELEX_entertainment_L		34.0	760.0
-TUBELEX_entertainment_B			855.0
+TUBELEX\textsubscript{base}			162.0
+TUBELEX\textsubscript{lemma}		8.0	356.0
+TUBELEX_entertainment	2866.0	47.0	1252.0
+TUBELEX_entertainment_L		34.0	753.0
+TUBELEX_entertainment_B			898.0
 TUBELEX_entertainment_R		46.0	
-TUBELEX_comedy	23111.0	951.0	11808.0
-TUBELEX_comedy_L		803.0	10331.0
-TUBELEX_comedy_B			11177.0
+TUBELEX_comedy	23111.0	951.0	11983.0
+TUBELEX_comedy_L		803.0	10386.0
+TUBELEX_comedy_B			11316.0
 TUBELEX_comedy_R		963.0	

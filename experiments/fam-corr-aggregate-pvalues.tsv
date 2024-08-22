@@ -1,19 +1,19 @@
 	Chinese	Indonesian	Japanese
-wordfreq	0.000000	0.002186	0.512063
+wordfreq	0.000000	0.002186	0.073639
 Wikipedia	0.000000	0.000000	0.000000
 Wikipedia_R		0.000000	
 SUBTLEX	0.709400		
 OpenSubtitles	0.000000	0.000112	0.000000
-CSJ			0.146180
+CSJ			0.000002
 TUBELEX			
 TUBELEX\textsubscript{regex}		0.000001	
-TUBELEX\textsubscript{base}			0.000000
-TUBELEX\textsubscript{lemma}		0.272339	0.000000
+TUBELEX\textsubscript{base}			0.000014
+TUBELEX\textsubscript{lemma}		0.272339	0.293625
 TUBELEX_entertainment	0.000000	0.486276	0.000000
 TUBELEX_entertainment_L		0.086348	0.000000
 TUBELEX_entertainment_B			0.000000
 TUBELEX_entertainment_R		0.021581	
-TUBELEX_comedy	0.000000	0.000000	0.000000
-TUBELEX_comedy_L		0.000000	0.000000
-TUBELEX_comedy_B			0.000000
+TUBELEX_comedy	0.000000	0.000000	0.016488
+TUBELEX_comedy_L		0.000000	0.833874
+TUBELEX_comedy_B			0.000080
 TUBELEX_comedy_R		0.000000	
