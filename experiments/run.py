@@ -11,6 +11,8 @@ from csv import QUOTE_NONE
 import numpy as np
 import wordfreq as wf  # word_frequency, tokenize, get_frequency_dict
 from itertools import chain
+from typing import NamedTuple, Any
+from tqdm import tqdm
 
 from sklearn.linear_model import RidgeCV
 from sklearn.metrics import (
@@ -18,7 +20,7 @@ from sklearn.metrics import (
     )
 from joblib import dump, load
 from frequency_data import FrequencyData, download_if_necessary
-from datasets import load_dataset
+from datasets import load_dataset, Dataset
 from spalex import get_spalex
 
 sys.path.append(os.path.join(os.path.dirname(__file__), os.pardir))
@@ -26,7 +28,6 @@ sys.path.append(os.path.join(os.path.dirname(__file__), os.pardir))
 from tubelex import add_tokenizer_arg_group, get_tokenizers, nfkc_lower
 from lang_utils import get_re_split
 
-DATASET_NAME = 'MLSP2024/MLSP2024'
 
 FREQ_EPS = 1e-9
 
@@ -69,6 +70,27 @@ def pearson_r(x: np.ndarray, y: np.ndarray):
     return np.corrcoef(x, y)[0][1]
 
 
+DATASET_NAME = 'MLSP2024/MLSP2024'
+LANG2DATASET_ID = {
+    'es': 'spanish_lcp_labels',
+    'en': 'english_lcp_labels',
+    'ja': 'japanese_lcp_labels'
+    }
+
+
+def get_mlsp_dataset(
+    lang_or_id: str,
+    train: bool = False,
+    token: Optional[str] = None
+    ) -> Dataset:
+    input_id = LANG2DATASET_ID.get(lang_or_id, lang_or_id)
+    return load_dataset(
+        DATASET_NAME, input_id,
+        split=('trial' if train else 'test'),
+        token=token
+        )
+
+
 def get_sub_freq_data(language: str) -> FrequencyData:
     return FrequencyData.from_subtitles(language)
 
@@ -77,9 +99,13 @@ def get_wiki_freq_data(language: str) -> FrequencyData:
     return FrequencyData.from_wiki(language)
 
 
-def get_gini_missing_func(language: str) -> Callable[[str], tuple[float, bool]]:
+def get_gini_data(language: str) -> pd.Series:
     df = pd.read_csv(f'data/GINI_{language}.csv', na_filter=False, quoting=QUOTE_NONE)
-    gini = df.set_index('Word')['GINI']
+    return df.set_index('Word')['GINI']
+
+
+def get_gini_missing_func(language: str) -> Callable[[str], tuple[float, bool]]:
+    gini = get_gini_data(language)
     max_gini = gini.max()
 
     def gini_missing_func(word: str) -> tuple[float, bool]:
@@ -95,13 +121,17 @@ def get_gini_missing_func(language: str) -> Callable[[str], tuple[float, bool]]:
 ACTIV_ES_PATH = 'data/downloads/activ-es.csv'
 
 
-def get_activ_es_freq_missing_func() -> Callable[[str], tuple[float, bool]]:
+def get_activ_es_data() -> pd.Series:
     download_if_necessary(
         'https://github.com/francojc/activ-es/raw/master/activ-es-v.02/'
         'wordlists/plain/aes1grams.csv', ACTIV_ES_PATH
         )
     df      = pd.read_csv(ACTIV_ES_PATH, index_col='word')
-    freq    = df['aes_orf'] / 100_000
+    return df['aes_orf'] / 100_000
+
+
+def get_activ_es_freq_missing_func() -> Callable[[str], tuple[float, bool]]:
+    freq    = get_activ_es_data()
     min_freq = freq.min()
 
     def activ_es_freq_missing_func(word: str) -> tuple[float, bool]:
@@ -151,10 +181,10 @@ def get_familiarity_data(language: str) -> pd.Series:
         df = df[~df[fam_col].isna()]    # removes comments
         series = df.set_index('Words (Indonesian)')[fam_col]
     elif language == 'en':
-#         fam_col = "FAM"
-#         df = pd.read_csv('data/mrc.csv')
-#         df = df[~df[fam_col].isna()]    # removes N/A values
-#         series = df.set_index('WORD')[fam_col]
+        # fam_col = "FAM"
+        # df = pd.read_csv('data/mrc.csv')
+        # df = df[~df[fam_col].isna()]    # removes N/A values
+        # series = df.set_index('WORD')[fam_col]
         fam_col = "FAM"
         df = pd.read_csv('data/Clark-BRMIC-2004/cp2004b.txt', delimiter=r'\s+')
         df = df[~df[fam_col].isna()]            # removes N/A values
@@ -301,7 +331,9 @@ def get_kytea_tokenizer(lang: str) -> Callable[[str], list[str]]:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     action = parser.add_mutually_exclusive_group()
-    action.add_argument('--stats', action='store_true') # TODO TODO
+    action.add_argument('--stats', action='store_true')
+    action.add_argument('--stats-datasets', default='experiments/stats-datasets.csv')
+    action.add_argument('--stats-corpora', default='experiments/stats-corpora.csv')
     action.add_argument('--train', action='store_true')
     action.add_argument('--correlation', action='store_true')
     parser.add_argument(
@@ -420,7 +452,101 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def main(args: argparse.Namespace):
+class StatData(NamedTuple):
+    get: Callable[[str], Any]
+    langs: list[str] | dict[str, str]
+
+    def data(self) -> dict['str', Any]:
+        langs = self.langs
+        args_langs = (
+            langs.items() if isinstance(langs, dict) else
+            zip(map(lambda lang: (lang,), langs), langs)
+            )
+        return {lang: self.get(*args) for args, lang in args_langs}
+
+    def types(corpus: Any) -> int:
+        if isinstance(corpus, FrequencyData):
+            return len(corpus.f)
+        assert isinstance(corpus, (pd.Series, dict))    # any Series or a wordfreq dict
+        return len(corpus)
+
+    def tokens(corpus: Any) -> Optional[int]:
+        if isinstance(corpus, FrequencyData):
+            return corpus.f_total
+        if isinstance(corpus, dict):        # wordfreq dict
+            return None
+        assert isinstance(corpus, pd.Series)
+        if corpus.name == 'aes_orf':        # ACTIV-ES (Francom et al., 2014)
+            return 3_897_234
+        if corpus.name == 'GINI':           # GINI: unknown
+            return None
+        n = corpus.sum()
+        assert n % 1 == 0
+        return int(n)
+
+
+ALL_LANGS = ['en', 'es', 'zh', 'id', 'ja']
+
+STATS_CORPORA: dict[str, StatData] = {
+    'SUBTLEX':          StatData(get_sub_freq_data,             ['en', 'es', 'zh']),
+    'SUBTLEX-UK':       StatData(get_sub_freq_data,             {('en-uk',): 'en'}),
+    'Wikipedia':        StatData(get_wiki_freq_data,            ALL_LANGS),
+    'OpenSubtitles':    StatData(get_opensubtitles_freq_data,   ALL_LANGS),
+    'CSJ':              StatData(get_csj_freq_data,             {(): 'ja'}),
+    'SubIMDB':          StatData(get_subimdb_freq_data,         {(): 'en'}),
+    'EsPal':            StatData(get_espal_freq_data,           {(): 'es'}),
+    'GINI':             StatData(get_gini_data,                 ['en', 'ja']),
+    'ACTIV-ES':         StatData(get_activ_es_data,             {(): 'es'})
+    }
+
+STATS_DATASETS: dict[str, StatData] = {
+    'ldt':              StatData(get_ldt_data,                  ['en', 'es', 'zh']),
+    'mlsp':             StatData(get_mlsp_dataset,              ['en', 'es', 'ja']),
+    'fam':              StatData(get_familiarity_data,          ALL_LANGS)
+}
+
+
+def do_stats(path_datasets: str, path_corpora: str) -> None:
+    sizes = {}
+    tokens = {}
+    types = {}
+
+    for path, name2stat_data, is_dataset in (
+        (path_corpora, STATS_CORPORA, False),
+        (path_datasets, STATS_DATASETS, True)
+        ):
+        for name, stat_data in tqdm(iterable=name2stat_data.items(), desc=path):
+            ld = stat_data.data()
+            if is_dataset:
+                sizes[name] = {lang: len(data) for lang, data in ld.items()}
+            else:
+                tokens[name] = {
+                    lang: StatData.tokens(data) for lang, data in ld.items()
+                    }
+                types[name] = {lang: StatData.types(data) for lang, data in ld.items()}
+
+        if is_dataset:
+            df = pd.DataFrame(sizes)
+        else:
+            corpora_order = list(STATS_CORPORA.keys())
+            df = pd.concat({
+                'tokens': pd.DataFrame(tokens),
+                'types': pd.DataFrame(types),
+                }, axis=1).swaplevel(axis=1).sort_index(
+                    # Keep columns in `corpora_order`:
+                    axis=1,
+                    key=lambda cols: pd.Index(map(
+                        lambda col: corpora_order.index(col) if (col in corpora_order)
+                        else col,
+                        cols
+                        ))
+                    )
+
+        # prevent .0 floats TODO .transpose()
+        df.to_csv(path, float_format='%d')
+
+
+def main(args: argparse.Namespace) -> None:
     # Input data:
     mlsp_subsets = args.mlsp
     ldt_langs = args.ldt
@@ -429,12 +555,18 @@ def main(args: argparse.Namespace):
     output_files = args.output_files
     model_dir = args.models
     train = args.train
+    stats = args.stats
     correlation = args.correlation
     read_gold = train or correlation
     subimdb = args.subimdb
     espal = args.espal
     csj = args.csj
     f_lookups = None
+
+    if args.stats:
+        do_stats(path_datasets=args.stats_datasets, path_corpora=args.stats_corpora)
+        return
+
     if args.log_lookups is not None:
         f_lookups = open(args.log_lookups, 'a')
 
@@ -650,11 +782,7 @@ def main(args: argparse.Namespace):
             )
         if mlsp_subsets:
             try:
-                dataset = load_dataset(
-                    DATASET_NAME, input_id,
-                    split=('trial' if train else 'test'),
-                    token=args.token
-                    )
+                dataset = get_mlsp_dataset(input_id, train=train, token=args.token)
             except Exception:
                 raise Exception(
                     f'Cannot retrieve dataset. Check the above exception, that you '
