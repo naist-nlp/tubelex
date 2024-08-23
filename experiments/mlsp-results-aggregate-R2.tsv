@@ -3,6 +3,7 @@ wordfreq	0.5475	0.3565	0.2556
 Wikipedia	0.3653	0.2313	-0.2553
 Wikipedia_R	0.3653		-0.2553
 SUBTLEX	0.3943		-0.2543
+SUBTLEX-UK	0.5126		
 SUBTLEX_R	0.3943		-0.2543
 SubIMDB	0.3773		
 SubIMDB_R	0.3773		
@@ -12,7 +13,7 @@ GINI_R	0.0408
 CSJ		0.2256	
 ACTIV-ES			-0.2531
 EsPal			0.1701
-TUBELEX	0.5525	0.4054	0.3272
+TUBELEX\textsubscript{default}	0.5525	0.4054	0.3272
 TUBELEX\textsubscript{regex}	0.552		0.3076
 TUBELEX\textsubscript{base}		0.4238	
 TUBELEX\textsubscript{lemma}	0.5608	0.2337	0.2987

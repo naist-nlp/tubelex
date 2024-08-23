@@ -6,13 +6,14 @@ import sys
 from corrstats import dependent_corr
 
 
-TUBELEX = 'TUBELEX'
+TUBELEX = 'TUBELEX\\textsubscript{default}'
 CORPUS2ID = {
     'wordfreq': 'wordfreq',
     'wordfreq_R': 'wordfreq-regex',
     'Wikipedia': 'wiki',
     'Wikipedia_R': 'wiki-regex',
     'SUBTLEX': 'subtlex',
+    'SUBTLEX-UK': 'subtlex-uk',
     'SUBTLEX_R': 'subtlex-regex',
     'SubIMDB': 'subimdb',
     'SubIMDB_R': 'subimdb-regex',
@@ -22,7 +23,7 @@ CORPUS2ID = {
     'CSJ': 'csj-lemma',
     'ACTIV-ES': 'activ-es',
     'EsPal': 'espal',
-    'TUBELEX': 'tubelex',
+    'TUBELEX\\textsubscript{default}': 'tubelex',
     'TUBELEX\\textsubscript{regex}': 'tubelex-regex',
     'TUBELEX\\textsubscript{base}': 'tubelex-base',
     'TUBELEX\\textsubscript{lemma}': 'tubelex-lemma',

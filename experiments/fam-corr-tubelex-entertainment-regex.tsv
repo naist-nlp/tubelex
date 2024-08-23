@@ -1,4 +1,4 @@
 file	language	correlation	corr_tubelex	n	n_missing
 id	Indonesian	0.6103	0.9527	1490	46
-en	English	0.7650	0.9711	4923	141
+en	English	0.7851	0.9761	2311	36
 es	Spanish	0.5888	0.9636	820	42

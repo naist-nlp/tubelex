@@ -1,23 +1,24 @@
 	Chinese	English	Indonesian	Japanese	Spanish
-wordfreq	3.0	21.0	100.0	489.0	24.0
-Wikipedia	347.0	4.0	12.0	441.0	816.0
+wordfreq	3.0	4.0	100.0	489.0	24.0
+Wikipedia	347.0	1.0	12.0	441.0	14.0
 Wikipedia_R			12.0		
-SUBTLEX	2024.0	89.0			816.0
-SubIMDB		36.0			
-OpenSubtitles	196.0	14.0	7.0	12809.0	18.0
-GINI		298.0		1739.0	
+SUBTLEX	2024.0	14.0			130.0
+SUBTLEX-UK		69.0			
+SubIMDB		4.0			
+OpenSubtitles	196.0	2.0	7.0	12809.0	15.0
+GINI		293.0		1739.0	
 CSJ				5327.0	
-ACTIV-ES					816.0
-EsPal					69.0
-TUBELEX	635.0	37.0	10.0	286.0	19.0
-TUBELEX\textsubscript{regex}		35.0	10.0		15.0
+ACTIV-ES					164.0
+EsPal					65.0
+TUBELEX\textsubscript{default}	635.0	8.0	10.0	286.0	17.0
+TUBELEX\textsubscript{regex}		6.0	10.0		15.0
 TUBELEX\textsubscript{base}				162.0	
-TUBELEX\textsubscript{lemma}		34.0	8.0	356.0	17.0
-TUBELEX_entertainment	2866.0	143.0	47.0	1252.0	47.0
-TUBELEX_entertainment_L		122.0	34.0	753.0	40.0
+TUBELEX\textsubscript{lemma}		7.0	8.0	356.0	16.0
+TUBELEX_entertainment	2866.0	38.0	47.0	1252.0	44.0
+TUBELEX_entertainment_L		34.0	34.0	753.0	39.0
 TUBELEX_entertainment_B				898.0	
-TUBELEX_entertainment_R		141.0	46.0		42.0
-TUBELEX_comedy	23111.0	935.0	951.0	11983.0	320.0
-TUBELEX_comedy_L		817.0	803.0	10386.0	291.0
+TUBELEX_entertainment_R		36.0	46.0		42.0
+TUBELEX_comedy	23111.0	372.0	951.0	11983.0	319.0
+TUBELEX_comedy_L		311.0	803.0	10386.0	289.0
 TUBELEX_comedy_B				11316.0	
-TUBELEX_comedy_R		929.0	963.0		317.0
+TUBELEX_comedy_R		368.0	963.0		317.0

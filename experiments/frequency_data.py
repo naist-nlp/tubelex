@@ -65,6 +65,15 @@ LANG2SUBT: dict[str, FrequencyDataSpec] = {
         cols=('Word', 'FREQcount', 'CDcount'),
         to_lower=True,
         ),
+    # https://www.psychology.nottingham.ac.uk/subtlex-uk/
+    'en-uk': FrequencyDataSpec(
+        filename='data/downloads/subtlex-uk.zip',
+        url=(
+            'https://www.psychology.nottingham.ac.uk/subtlex-uk/SUBTLEX-UK.txt.zip'
+            ),
+        cols=('Spelling', 'FreqCount', 'CD_count'),
+        to_lower=True,
+        ),
     # http://crr.ugent.be/programs-data/subtitle-frequencies/subtlex-ch
     'zh': FrequencyDataSpec(
         filename='data/downloads/subtlex-zh.zip',
@@ -220,7 +229,10 @@ class FrequencyData(NamedTuple):
         cd = Counter() if (len(indices) == COLS_DEFAULT) else None
 
         for line in file:
-            fields = line.rstrip('\n').split('\t')
+            line = line.rstrip('\n\t')
+            if not line:
+                continue    # Ignore lines only consisting of tabs/empty (SUBTLEX-UK)
+            fields = line.split('\t')
             word, freq, *opt_docs = (fields[i] for i in indices)
 
             if to_lower:

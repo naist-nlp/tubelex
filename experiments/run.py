@@ -151,18 +151,24 @@ def get_familiarity_data(language: str) -> pd.Series:
         df = df[~df[fam_col].isna()]    # removes comments
         series = df.set_index('Words (Indonesian)')[fam_col]
     elif language == 'en':
+#         fam_col = "FAM"
+#         df = pd.read_csv('data/mrc.csv')
+#         df = df[~df[fam_col].isna()]    # removes N/A values
+#         series = df.set_index('WORD')[fam_col]
         fam_col = "FAM"
-        df = pd.read_csv('data/mrc.csv')
-        df = df[~df[fam_col].isna()]    # removes N/A values
+        df = pd.read_csv('data/Clark-BRMIC-2004/cp2004b.txt', delimiter=r'\s+')
+        df = df[~df[fam_col].isna()]            # removes N/A values
+        df['WORD'] = df['WORD'].str.lower()    # lowercase (words are all UPPERCASE)
         series = df.set_index('WORD')[fam_col]
     elif language == 'es':
         fam_col = "Fam"
         df = pd.read_csv('data/es-moreno-martinez.csv')
-        df = df[~df[fam_col].isna()]    # removes N/A values
+        df = df[~df[fam_col].isna()]                # remove N/A values
+        df['Spanish'] = df['Spanish'].str.strip()   # strip spaces
         series = df.set_index('Spanish')[fam_col]
     elif language == 'ja':
         df = pd.read_csv('data/Lexeed.txt',
-                         header=None, names=range(1, 37), # Readme_Lexeed.txt numbering
+                         header=None, names=range(1, 37),  # Readme_Lexeed.txt numbering
                          encoding='sjis'
                          )
         # Take only the first orthography from "32:語義別表記", e.g.
@@ -295,6 +301,7 @@ def get_kytea_tokenizer(lang: str) -> Callable[[str], list[str]]:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     action = parser.add_mutually_exclusive_group()
+    action.add_argument('--stats', action='store_true') # TODO TODO
     action.add_argument('--train', action='store_true')
     action.add_argument('--correlation', action='store_true')
     parser.add_argument(
@@ -337,6 +344,10 @@ def parse_args() -> argparse.Namespace:
         default=[], help=(
             'Use SUBTLEX for these language codes.'
             )
+        )
+    parser.add_argument(
+        '--subtlex-uk', action='store_true',
+        default=[], help='Use SUBTLEX-UK for English.'
         )
     parser.add_argument(
         '--opensubtitles', '--os', nargs='*',
@@ -469,15 +480,20 @@ def main(args: argparse.Namespace):
     lang2gini_func = {}
     activ_es_func = None
 
+    subtlex = args.subtlex
     for lang in args.subtlex:
         lang2freq_data[lang] = get_sub_freq_data(lang)
+    if args.subtlex_uk:
+        assert 'en' not in lang2freq_data
+        subtlex.append('en')
+        lang2freq_data['en'] = get_sub_freq_data('en-uk')
 
     lang2corpus_specific_tokenizer = {}
     for lang in args.opensubtitles:
         lang2freq_data[lang] = get_opensubtitles_freq_data(lang)
         if tokenize_c_j and (lang in LANG2KYTEA_MODEL):
             lang2corpus_specific_tokenizer[lang] = get_kytea_tokenizer(lang)
-    for lang in chain(args.wikipedia, args.subtlex, args.gini):
+    for lang in chain(args.wikipedia, subtlex, args.gini):
         # These corpora use simple regex tokenization (except for zh/ja)
         # OpenSubtitles, SubIMDB use something more advanced (similar to Stanza)
         if lang not in ('zh', 'ja'):
@@ -518,7 +534,7 @@ def main(args: argparse.Namespace):
             )
 
     all_langs = set(chain(
-        args.subtlex, args.opensubtitles, args.tubelex,
+        subtlex, args.opensubtitles, args.tubelex,
         args.wikipedia, args.gini, args.wordfreq,
         ['en'] if subimdb else [],
         ['es'] if (espal or activ_es_func is not None) else [],
