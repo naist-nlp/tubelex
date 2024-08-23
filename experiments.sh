@@ -70,60 +70,30 @@ python experiments/run.py --espal --train   --mlsp spanish_lcp_labels
 python experiments/run.py --espal --metrics --mlsp spanish_lcp_labels > experiments/mlsp-results-espal.tsv
 python experiments/run.py --espal --corr    --mlsp spanish_lcp_labels > experiments/mlsp-corr-espal.tsv
 
+echo alonso
+python experiments/run.py --alonso --train   --mlsp spanish_lcp_labels
+python experiments/run.py --alonso --metrics --mlsp spanish_lcp_labels > experiments/mlsp-results-alonso.tsv
+python experiments/run.py --alonso --corr    --mlsp spanish_lcp_labels > experiments/mlsp-corr-alonso.tsv
+
 echo activ-es
 python experiments/run.py --activ-es --train   --mlsp spanish_lcp_labels
 python experiments/run.py --activ-es --metrics --mlsp spanish_lcp_labels > experiments/mlsp-results-activ-es.tsv
 python experiments/run.py --activ-es --corr    --mlsp spanish_lcp_labels > experiments/mlsp-corr-activ-es.tsv
 
+echo wordfreq
+python experiments/run.py --wordfreq es en ja --train   --mlsp $all
+python experiments/run.py --wordfreq es en ja --metrics --mlsp $all > experiments/mlsp-results-wordfreq.tsv
+python experiments/run.py --wordfreq es en ja --corr    --mlsp $all > experiments/mlsp-corr-wordfreq.tsv
 
-for variant in '' -regex
-do
-	case "$variant" in
-	  '')
-		langs="es en ja"
-		mlsp="$all"	
-		var_opt=''
-		;;
-	  -regex)
-		langs="es en"
-		mlsp="$esen"
-		var_opt='--tokenization regex'
-		;;
-	esac
-	if [ -z "$variant" ]
-	then
-		# We always use the wordfreq tokenization for wordfreq
-		echo wordfreq$variant
-		python experiments/run.py $var_opt --wordfreq $langs --train   --mlsp $mlsp
-		python experiments/run.py $var_opt --wordfreq $langs --metrics --mlsp $mlsp > experiments/mlsp-results-wordfreq${variant}.tsv
-		python experiments/run.py $var_opt --wordfreq $langs --corr    --mlsp $mlsp > experiments/mlsp-corr-wordfreq${variant}.tsv
-	fi
-	
-done
 echo wiki
 python experiments/run.py --wiki es en ja --train   --mlsp $all
 python experiments/run.py --wiki es en ja --metrics --mlsp $all > experiments/mlsp-results-wiki.tsv
 python experiments/run.py --wiki es en ja --corr    --mlsp $all > experiments/mlsp-corr-wiki.tsv
 	
-for variant in '' -regex
-do
-	case "$variant" in
-	  '')
-		langs="en ja"
-		mlsp="english_lcp_labels japanese_lcp_labels"	
-		var_opt=''
-		;;
-	  -regex)
-		langs="en"
-		mlsp="english_lcp_labels"	
-		var_opt='--tokenization regex'
-		;;
-	esac
-	echo gini$variant
-	python experiments/run.py $var_opt --minus --gini $langs --train   --mlsp $mlsp
-	python experiments/run.py $var_opt --minus --gini $langs --metrics --mlsp $mlsp > experiments/mlsp-results-gini${variant}.tsv
-	python experiments/run.py $var_opt --minus --gini $langs --corr    --mlsp $mlsp > experiments/mlsp-corr-gini${variant}.tsv
-done
+echo gini
+python experiments/run.py --minus --gini en ja --train   --mlsp english_lcp_labels japanese_lcp_labels
+python experiments/run.py --minus --gini en ja --metrics --mlsp english_lcp_labels japanese_lcp_labels > experiments/mlsp-results-gini.tsv
+python experiments/run.py --minus --gini en ja --corr    --mlsp english_lcp_labels japanese_lcp_labels > experiments/mlsp-corr-gini.tsv
 
 # Doesn't improve:
 # echo GINI-log
@@ -135,22 +105,15 @@ done
 # 	english_lcp_labels japanese_lcp_labels > experiments/mlsp-corr-gini-log.tsv
 
 
+echo subtlex
+python experiments/run.py --subtlex es en --train   --mlsp $esen
+python experiments/run.py --subtlex es en --metrics --mlsp $esen > experiments/mlsp-results-subtlex.tsv
+python experiments/run.py --subtlex es en --corr    --mlsp $esen > experiments/mlsp-corr-subtlex.tsv
 
-for variant in '' -regex
-do
-	case "$variant" in
-	  '')
-		var_opt=''
-		;;
-	  -regex)
-		var_opt='--tokenization regex'
-		;;
-	esac
-	echo subtlex$variant
-	python experiments/run.py $var_opt --subtlex es en --train   --mlsp $esen
-	python experiments/run.py $var_opt --subtlex es en --metrics --mlsp $esen > experiments/mlsp-results-subtlex${variant}.tsv
-	python experiments/run.py $var_opt --subtlex es en --corr    --mlsp $esen > experiments/mlsp-corr-subtlex${variant}.tsv
-done
+echo subtlex-uk
+python experiments/run.py --subtlex-uk --train   --mlsp english_lcp_labels
+python experiments/run.py --subtlex-uk --metrics --mlsp english_lcp_labels > experiments/mlsp-results-subtlex-uk.tsv
+python experiments/run.py --subtlex-uk --corr    --mlsp english_lcp_labels > experiments/mlsp-corr-subtlex-uk.tsv
 
 echo subimdb
 python experiments/run.py --subimdb --train   --mlsp english_lcp_labels
@@ -177,37 +140,34 @@ do
 	then
 		python experiments/run.py $corpus_opt en es --form lemma         --corr --ldt en es    > experiments/ldt-corr-${corpus}-lemma.tsv
 		python experiments/run.py $corpus_opt en es --tokenization regex --corr --ldt en es    > experiments/ldt-corr-${corpus}-regex.tsv
-	elif [[ "$corpus" != 'wordfreq' ]] && [[ "$corpus" != 'wiki' ]]
-	then
-		# We always use wordfreq tokenization for wordfreq:
-		python experiments/run.py $corpus_opt en es --tokenization regex --corr --ldt en es    > experiments/ldt-corr-${corpus}-regex.tsv
 	fi
 done
-# Regex wouldn't change anything for en:
 echo "gini"
 python experiments/run.py --minus --gini en                              --corr --ldt en       > experiments/ldt-corr-gini.tsv
 echo "subimdb"
 python experiments/run.py --subimdb 				                     --corr --ldt en       > experiments/ldt-corr-subimdb.tsv
 echo "espal"
-python experiments/run.py --espal 										 --corr --ldt es > 
+python experiments/run.py --espal 										 --corr --ldt es	   > experiments/ldt-corr-espal.tsv
+echo "alonso"
+python experiments/run.py --alonso 										 --corr --ldt es	   > experiments/ldt-corr-alonso.tsv
 echo "activ-es"
-python experiments/run.py --activ-es 									 --corr --ldt es > experiments/ldt-corr-activ-es.tsv
+python experiments/run.py --activ-es 									 --corr --ldt es 	   > experiments/ldt-corr-activ-es.tsv
 
 
 
-echo
-echo '==========='
-echo 'LDT z score'
-echo '==========='
-echo
-for corpus in tubelex subtlex os
-do
-	corpus_opt="--${corpus}"
-	echo "$corpus"
-	python experiments/run.py $corpus_opt     en zh                   --corr -z --ldt en zh 	  > experiments/ldtz-corr-${corpus}.tsv
-done
-echo "subimdb"
-python experiments/run.py --subimdb 				                     --corr -z --ldt en       > experiments/ldtz-corr-subimdb.tsv
+# echo
+# echo '==========='
+# echo 'LDT z score'
+# echo '==========='
+# echo
+# for corpus in tubelex subtlex os
+# do
+# 	corpus_opt="--${corpus}"
+# 	echo "$corpus"
+# 	python experiments/run.py $corpus_opt     en zh                   --corr -z --ldt en zh 	  > experiments/ldtz-corr-${corpus}.tsv
+# done
+# echo "subimdb"
+# python experiments/run.py --subimdb 				                     --corr -z --ldt en       > experiments/ldtz-corr-subimdb.tsv
 
 
 echo

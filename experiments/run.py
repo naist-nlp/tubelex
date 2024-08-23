@@ -169,7 +169,14 @@ def get_ldt_data(language: str, prefer_zscore: bool = False) -> pd.Series:
     return series
 
 
-def get_familiarity_data(language: str) -> pd.Series:
+def get_familiarity_data(
+    # IMPORTANT: STATS_DATASETS depends on the number/order of arguments!
+    language: str,
+    glasgow: bool = False,
+    clark_paivio: bool = False,
+    moreno_martinez: bool = False
+    # IMPORTANT: STATS_DATASETS depends on the number/order of arguments!
+    ) -> pd.Series:
     if language == 'zh':
         fam_col = 'FAM_M'
         df = pd.read_table('data/chinese-familiarity.tsv.xz')
@@ -181,21 +188,45 @@ def get_familiarity_data(language: str) -> pd.Series:
         df = df[~df[fam_col].isna()]    # removes comments
         series = df.set_index('Words (Indonesian)')[fam_col]
     elif language == 'en':
-        # fam_col = "FAM"
-        # df = pd.read_csv('data/mrc.csv')
-        # df = df[~df[fam_col].isna()]    # removes N/A values
-        # series = df.set_index('WORD')[fam_col]
-        fam_col = "FAM"
-        df = pd.read_csv('data/Clark-BRMIC-2004/cp2004b.txt', delimiter=r'\s+')
-        df = df[~df[fam_col].isna()]            # removes N/A values
-        df['WORD'] = df['WORD'].str.lower()    # lowercase (words are all UPPERCASE)
-        series = df.set_index('WORD')[fam_col]
+        assert not (glasgow and clark_paivio)
+        if glasgow:
+            fam_col = 'FAM'
+            df = pd.read_csv('data/en-glasgow.csv', header=[0, 1])
+            # Drop the second level, we just need to axcess the Words and (FAM) means,
+            # (and the CSV format is an irreparable mess anyway):
+            df.columns = df.columns.droplevel(1)
+            # There are no N/A values.
+            # Words contains multi-sense items such as:
+            # 'shell', 'shell (military)', 'shell (sea)'
+            # in which case we only keep the unspecified ones ('shell'):
+            df = df[~df['Words'].str.contains('(', regex=False)]
+            series = df.set_index('Words')[fam_col]
+        elif clark_paivio:
+            fam_col = "FAM"
+            df = pd.read_csv('data/Clark-BRMIC-2004/cp2004b.txt', delimiter=r'\s+')
+            df = df[~df[fam_col].isna()]            # removes N/A values
+            df['WORD'] = df['WORD'].str.lower()    # lowercase (words are all UPPERCASE)
+            series = df.set_index('WORD')[fam_col]
+        else:
+            # MRC (largest/default)
+            fam_col = "FAM"
+            df = pd.read_csv('data/mrc.csv')
+            df = df[~df[fam_col].isna()]    # removes N/A values
+            series = df.set_index('WORD')[fam_col]
     elif language == 'es':
-        fam_col = "Fam"
-        df = pd.read_csv('data/es-moreno-martinez.csv')
-        df = df[~df[fam_col].isna()]                # remove N/A values
-        df['Spanish'] = df['Spanish'].str.strip()   # strip spaces
-        series = df.set_index('Spanish')[fam_col]
+        if moreno_martinez:
+            fam_col = "Fam"
+            df = pd.read_csv('data/es-moreno-martinez.csv')
+            df = df[~df[fam_col].isna()]                # remove N/A values
+            df['Spanish'] = df['Spanish'].str.strip()   # strip spaces
+            series = df.set_index('Spanish')[fam_col]
+        else:
+            # Guasch+2016 (largest/default)
+            fam_col = "FAM_M"
+            df = pd.read_csv('data/es-guasch.csv')
+            df = df[~df[fam_col].isna()]                # remove N/A values
+            df['Word'] = df['Word'].str.strip()   # strip spaces
+            series = df.set_index('Word')[fam_col]
     elif language == 'ja':
         df = pd.read_csv('data/Lexeed.txt',
                          header=None, names=range(1, 37),  # Readme_Lexeed.txt numbering
@@ -203,7 +234,8 @@ def get_familiarity_data(language: str) -> pd.Series:
                          )
         # Take only the first orthography from "32:語義別表記", e.g.
         # 会う/遇う/逢う, ガキ・餓鬼, or いましめる・戒める/警める
-        df.set_index(df[32].str.partition('・')[0].str.partition('/')[0], inplace=True)
+        df['word'] = df[32].str.partition('・')[0].str.partition('/')[0]
+        df.set_index('word', inplace=True, drop=False)
         # Mean familiarity is recorded separately for each word sense
         # in "35:語義別単語親密度の平均値", we take the most familiar sense's value:
         series = df.groupby(level=0)[35].max()
@@ -296,6 +328,14 @@ def get_espal_freq_data() -> FrequencyData:
         )
 
 
+def get_alonso_freq_data() -> FrequencyData:
+    return FrequencyData.from_file_url(
+        filename='data/es-alonso-oral-freq.tsv',
+        cols=['Word', 'Frequency'],
+        total_row=False
+        )
+
+
 LANG2KYTEA_MODEL = {
     'ja': 'data/downloads/kytea/jp-0.4.7-5.mod',
     'zh': 'data/downloads/kytea/lcmc-0.4.0-5.mod'
@@ -352,6 +392,18 @@ def parse_args() -> argparse.Namespace:
     input_data.add_argument(
         '--familiarity', nargs='+',
         help='Language codes for familiarity (only for --correlation)'
+        )
+    parser.add_argument(
+        '--clark-paivio', action='store_true',
+        help='Use Clark-Paivio for English familiarity.'
+        )
+    parser.add_argument(
+        '--glasgow', action='store_true',
+        help='Use Glasgow norms for English familiarity.'
+        )
+    parser.add_argument(
+        '--moreno-martinez', action='store_true',
+        help='Use Moreno-Martinez+2014 for Spanish familiarity.'
         )
     parser.add_argument(
         '--zscore', '-z', action='store_true',
@@ -429,6 +481,11 @@ def parse_args() -> argparse.Namespace:
         '--activ-es', action='store_true', help='Use ACTIV-ES for Spanish.'
         )
     parser.add_argument(
+        '--alonso', action='store_true', help=(
+            'Use oral frequencies by Alonso et al. (2011) for Spanish.'
+            )
+        )
+    parser.add_argument(
         '--csj', action='store_true', help=(
             'Use CSJ for Japanese (requires --form lemma).'
             )
@@ -494,6 +551,7 @@ STATS_CORPORA: dict[str, StatData] = {
     'OpenSubtitles':    StatData(get_opensubtitles_freq_data,   ALL_LANGS),
     'CSJ':              StatData(get_csj_freq_data,             {(): 'ja'}),
     'SubIMDB':          StatData(get_subimdb_freq_data,         {(): 'en'}),
+    'Alonso+2011':      StatData(get_alonso_freq_data,          {(): 'es'}),
     'EsPal':            StatData(get_espal_freq_data,           {(): 'es'}),
     'GINI':             StatData(get_gini_data,                 ['en', 'ja']),
     'ACTIV-ES':         StatData(get_activ_es_data,             {(): 'es'})
@@ -502,8 +560,12 @@ STATS_CORPORA: dict[str, StatData] = {
 STATS_DATASETS: dict[str, StatData] = {
     'ldt':              StatData(get_ldt_data,                  ['en', 'es', 'zh']),
     'mlsp':             StatData(get_mlsp_dataset,              ['en', 'es', 'ja']),
-    'fam':              StatData(get_familiarity_data,          ALL_LANGS)
-}
+    'fam':              StatData(get_familiarity_data,          ALL_LANGS),
+    'fam-alt':          StatData(get_familiarity_data, {
+        ('en', True): 'English (Glasgow)',
+        ('es', False, False, True): 'Spanish (Moreno-Martinez+2014)',
+        })
+    }
 
 
 def do_stats(path_datasets: str, path_corpora: str) -> None:
@@ -513,7 +575,7 @@ def do_stats(path_datasets: str, path_corpora: str) -> None:
 
     for path, name2stat_data, is_dataset in (
         (path_corpora, STATS_CORPORA, False),
-        (path_datasets, STATS_DATASETS, True)
+        (path_datasets, STATS_DATASETS, True),
         ):
         for name, stat_data in tqdm(iterable=name2stat_data.items(), desc=path):
             ld = stat_data.data()
@@ -541,8 +603,10 @@ def do_stats(path_datasets: str, path_corpora: str) -> None:
                         cols
                         ))
                     )
+        # languages as rows:
+        df = df.rename(lambda lang: LANG2FULL_NAME.get(lang, lang)).transpose()
 
-        # prevent .0 floats TODO .transpose()
+        # prevent .0 floats
         df.to_csv(path, float_format='%d')
 
 
@@ -555,11 +619,11 @@ def main(args: argparse.Namespace) -> None:
     output_files = args.output_files
     model_dir = args.models
     train = args.train
-    stats = args.stats
     correlation = args.correlation
     read_gold = train or correlation
     subimdb = args.subimdb
     espal = args.espal
+    alonso = args.alonso
     csj = args.csj
     f_lookups = None
 
@@ -655,6 +719,10 @@ def main(args: argparse.Namespace) -> None:
         assert 'es' not in lang2freq_data
         lang2freq_data['es'] = get_espal_freq_data()
 
+    if alonso:
+        assert 'es' not in lang2freq_data
+        lang2freq_data['es'] = get_alonso_freq_data()
+
     if args.activ_es:
         assert 'es' not in lang2freq_data
         activ_es_func = get_activ_es_freq_missing_func()
@@ -669,7 +737,7 @@ def main(args: argparse.Namespace) -> None:
         subtlex, args.opensubtitles, args.tubelex,
         args.wikipedia, args.gini, args.wordfreq,
         ['en'] if subimdb else [],
-        ['es'] if (espal or activ_es_func is not None) else [],
+        ['es'] if (espal or alonso or (activ_es_func is not None)) else [],
         ['ja'] if csj else [],
         ))
 
@@ -824,7 +892,12 @@ def main(args: argparse.Namespace) -> None:
             lang = input_id
             dataset = (
                 get_ldt_data(lang, prefer_zscore=args.zscore) if ldt_langs else
-                get_familiarity_data(lang)
+                get_familiarity_data(
+                    lang,
+                    glasgow=args.glasgow,
+                    clark_paivio=args.clark_paivio,
+                    moreno_martinez=args.moreno_martinez
+                    )
                 )
             (
                 data, targets, frequencies, tubelex_f, missing, gold

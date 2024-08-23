@@ -30,12 +30,16 @@ do
 		python experiments/run.py $corpus_opt id    en es --tokenization regex --corr --fam id    en es  > experiments/fam-corr-${corpus}-regex.tsv
 	fi
 done
+# echo subtlex-uk
+# python experiments/run.py --subtlex-uk --corr --fam en > experiments/fam-corr-subtlex-uk.tsv
 # echo csj-lemma
 # python experiments/run.py --form lemma --csj 						      --corr --fam ja 		> experiments/fam-corr-csj-lemma.tsv
 # echo subtlex
 # python experiments/run.py --subtlex zh en es    						  --corr --fam zh en es > experiments/fam-corr-subtlex.tsv
 # echo espal
 # python experiments/run.py --espal 										  --corr --fam es 		> experiments/fam-corr-espal.tsv
+# echo alonso
+# python experiments/run.py --alonso 										  --corr --fam es 		> experiments/fam-corr-alonso.tsv
 # echo activ-es
 # python experiments/run.py --activ-es 								      --corr --fam es  		> experiments/fam-corr-activ-es.tsv
 # echo gini

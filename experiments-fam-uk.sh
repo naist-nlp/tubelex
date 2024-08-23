@@ -8,24 +8,8 @@ export HF_DATASETS_OFFLINE=1
 # Exit on error:
 set -e
 echo subtlex-uk
-python experiments/run.py --subtlex-uk --corr --fam en > experiments/fam-corr-subtlex-uk.tsv
 
 # MLSP
-for variant in '' -regex
-do
-	case "$variant" in
-	  '')
-		var_opt=''
-		;;
-	  -regex)
-		var_opt='--tokenization regex'
-		;;
-	esac
-	echo subtlex$variant
-	python experiments/run.py $var_opt --subtlex-uk --train   --mlsp english_lcp_labels
-	python experiments/run.py $var_opt --subtlex-uk --metrics --mlsp english_lcp_labels > experiments/mlsp-results-subtlex-uk${variant}.tsv
-	python experiments/run.py $var_opt --subtlex-uk --corr    --mlsp english_lcp_labels > experiments/mlsp-corr-subtlex-uk${variant}.tsv
-done
 
 echo
 echo '==='

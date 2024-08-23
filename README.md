@@ -157,7 +157,10 @@ To replicate our experiments you will need the following files placed in the dat
 - `elexicon.csv` file available via word generation form at the [English Lexicon Project](https://elexicon.wustl.edu),
 - `MELD-SCH.csv`, [MELD-SCH](https://link.springer.com/article/10.3758/s13428-017-0944-0#Sec13) database, available online as a supplementary Excel file "ESM 1", converted to UTF-8 CSV (using Excel),
 - `Clark-BRMIC-2004`, (we use only the `Clark-BRMIC-2004/cp2004b.txt` file), expanded zip archive, available online as a supplementary material for [English norms (Clark and Paivio, 2004)](https://link.springer.com/article/10.3758/BF03195584#SecESM1),
-- `es-moreno-martinez.csv`, [Spanish norms (Moreno-Martínez et al., 2014)](https://link.springer.com/article/10.3758/s13428-013-0435-x#Sec22) database, available online as a supplementary Excel file "ESM 1", converted to UTF-8 CSV (using Excel), 
+- `en-glasgow.csv` [Glasgow norms](https://link.springer.com/article/10.3758/s13428-018-1099-3#Sec13), available online as a supplementary CSV file "ESM 2",
+- `es-alonso-oral-freq.tsv`, available online as a supplementary material for [Spanish oral frequencies by Alonso et al. 2011](https://link.springer.com/article/10.3758/s13428-011-0062-3#SecESM1), concatenated two “columns” into one and exported to UTF-8 TSV,
+- `es-guasch.csv`, [Spanish norms (Guasch et al., 2014)](https://link.springer.com/article/10.3758/s13428-015-0684-y#Sec13) database, available online as a supplementary Excel file "ESM 1", converted to UTF-8 CSV (using Excel), 
+- `es-moreno-martinez.csv`, [Spanish norms (Moreno-Martínez et al., 2014)](https://link.springer.com/article/10.3758/s13428-013-0435-x#Sec22) database, available online as a supplementary Excel file "ESM 1", converted to UTF-8 CSV (using Excel),
 - `Lexeed.txt`, file available from the CD-ROM accompanying [NTT Database Series: Lexical Properties of Japanese](https://ci.nii.ac.jp/ncid/BA44537988) by Amano Shigeaki and Kondo Tadahisa (1999-2022), i.e. the Heisei edition of the database.
 - `subimdb.tsv` file, which you can generate by first downloading and extracting the [SubIMDB](https://zenodo.org/records/2552407/files/SubIMDB_All_Individual.tar?download=1) corpus into the `SubIMDB_All_Individual` directory, and then compiling the frequency list with the following command:
 

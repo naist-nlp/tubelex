@@ -1,24 +1,25 @@
 	Chinese	English	Indonesian	Japanese	Spanish
-wordfreq	0.4664	0.974	0.8585	0.7446	0.9372
-Wikipedia	0.702	0.8958	0.8183	0.8503	0.8709
+wordfreq	0.4664	0.9736	0.8585	0.7446	0.9357
+Wikipedia	0.702	0.8957	0.8183	0.8503	0.832
 Wikipedia_R			0.822		
-SUBTLEX	0.7595	0.9159			0.8685
+SUBTLEX	0.7595	0.914			0.7997
 SUBTLEX-UK		0.9279			
-SubIMDB		0.9171			
-OpenSubtitles	0.6949	0.931	0.8493	0.4534	0.9215
-GINI		0.743		0.6904	
+SubIMDB		0.9113			
+OpenSubtitles	0.6949	0.9258	0.8493	0.4534	0.8264
+GINI		0.8012		0.6904	
 CSJ				0.7417	
-ACTIV-ES					0.7915
-EsPal					0.7886
+ACTIV-ES					0.777
+Alonso+2011					0.8385
+EsPal					0.6659
 TUBELEX\textsubscript{default}	1.0	1.0	1.0	1.0	1.0
 TUBELEX\textsubscript{regex}		0.9999	0.9969		1.0
 TUBELEX\textsubscript{base}				0.9556	
-TUBELEX\textsubscript{lemma}		0.9863	0.9556	0.6996	0.9848
-TUBELEX_entertainment	0.8666	0.9761	0.9552	0.9598	0.9634
-TUBELEX_entertainment_L		0.9655	0.9129	0.6717	0.9573
+TUBELEX\textsubscript{lemma}		0.988	0.9556	0.6996	0.9762
+TUBELEX_entertainment	0.8666	0.9712	0.9552	0.9598	0.9708
+TUBELEX_entertainment_L		0.9614	0.9129	0.6717	0.9486
 TUBELEX_entertainment_B				0.9103	
-TUBELEX_entertainment_R		0.9761	0.9527		0.9636
-TUBELEX_comedy	0.3969	0.9222	0.6278	0.812	0.7953
-TUBELEX_comedy_L		0.9191	0.675	0.5867	0.8025
+TUBELEX_entertainment_R		0.9711	0.9527		0.971
+TUBELEX_comedy	0.3969	0.8996	0.6278	0.812	0.8252
+TUBELEX_comedy_L		0.8983	0.675	0.5867	0.8204
 TUBELEX_comedy_B				0.7801	
-TUBELEX_comedy_R		0.9231	0.6198		0.7968
+TUBELEX_comedy_R		0.9	0.6198		0.8254

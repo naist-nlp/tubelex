@@ -18,6 +18,7 @@ VALID_CORPORA = {
     'CSJ': 'csj-lemma',
     'ACTIV-ES': 'activ-es',
     'EsPal': 'espal',
+    'Alonso+2011': 'alonso',
     'TUBELEX\\textsubscript{default}': 'tubelex',
     'TUBELEX\\textsubscript{regex}': 'tubelex-regex',
     'TUBELEX\\textsubscript{base}': 'tubelex-base',

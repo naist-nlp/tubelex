@@ -24,4 +24,9 @@ sbatch make-tokenize-ja.sh
 # Build data/subimdb.tsv using files extracted from
 # https://zenodo.org/records/2552407/files/SubIMDB_All_Individual.tar?download=1
 #
-# python tubelex.py --lang en -x --frequencies --tokenized-files SubIMDB_All_Individual/subtitles -o data/subimdb.tsv
+# python tubelex.py --lang en --frequencies --tokenized-files SubIMDB_All_Individual/subtitles -o data/subimdb.tsv
+
+
+# laborotvspeech 1+2 (merged)
+# https://laboro.ai/activity/column/engineer/laborotvspeech2/
+# python tubelex.py --lang en -x --frequencies --laborotv --tokenized-files laborotvspeech -o data/laborotvspeech.tsv.xz
