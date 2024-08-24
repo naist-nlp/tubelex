@@ -239,8 +239,8 @@ def add_tokenizer_arg_group(
     group.add_argument(
         '--tokenized-files', type=str, default=None,
         help=(
-            'Compute frequencies from tokenized files (e.g. SubIMDB; '
-            'requires --frequencies and --output).'
+            'Compute frequencies from tokenized files in a specified directory'
+            '(e.g. SubIMDB; see README; requires --frequencies and --output).'
             )
         )
     group.add_argument(
@@ -309,6 +309,13 @@ def parse() -> argparse.Namespace:
         )
 
     add_tokenizer_arg_group(parser, unique_tokenization=True)
+
+    parser.add_argument(
+        '--laborotvspeech', action='store_true',
+        help=(
+            'Tokenized files are LaboroTVSpeech (see README).'
+            )
+        )
 
     parser.add_argument(
         '--no-filter-cc-descriptions', action='store_false',
@@ -1000,6 +1007,15 @@ def do_unique(
                 write_file(file, text)
 
 
+LABOROTV_FILES = [
+    'LaboroTVSpeech_v1.0b/data/train/text.csv',
+    'LaboroTVSpeech_v1.0b/data/dev/text.csv',
+    'LaboroTVSpeech_v2.0b/data/train/text.csv',
+    'LaboroTVSpeech_v2.0b/data/dev/text.csv'
+    ]
+LABOROTV_SEG_PAT = re.compile(r'\+\w+\s*')
+
+
 def do_frequencies(
     lang: str,
     identifier: str,
@@ -1015,7 +1031,8 @@ def do_frequencies(
     channel_stats_path: Optional[str],
     min_videos: int,
     min_channels: int,
-    verbose: bool
+    verbose: bool,
+    laborotv: bool = False
     ) -> None:
 
     assert (tokenize is not None) != (pos_tag is not None), (tokenize, pos_tag)
@@ -1066,7 +1083,8 @@ def do_frequencies(
     with get_files_contents(
         tokenized_files or (UNIQUE_PATH_FMT % identifier),
         storage,
-        any_suffix=(tokenized_files is not None)
+        any_suffix=(tokenized_files is not None),
+        filenames=(LABOROTV_FILES if laborotv else None)
         ) as files_contents:
         files, iter_contents = files_contents
         n_videos = len(files[:limit])
@@ -1089,7 +1107,7 @@ def do_frequencies(
                 if (cat_ids is not None) else None
                 )
 
-            if not tokenized_files:
+            if tokenized_files is None:
                 # Normalize tilde: always AND before tokenization:
                 text = text.translate(NORMALIZE_FULLWIDTH_TILDE)
 
@@ -1105,6 +1123,18 @@ def do_frequencies(
                     # Remove and count CC descriptions
                     text, n = subn_cc_desc(' ', text)
                     n_cc_descriptions += n
+            elif laborotv:
+                for line in text.split('\n'):
+                    if not line:
+                        continue
+                    words = LABOROTV_SEG_PAT.split(line.split(',', 1)[1])
+                    assert not words[-1], (video_id, words)
+                    counters.add(words[:-1], channel_id, cat_id)
+                # In case of LaboroTV we consider v1 (train+dev) and v2 (train+dev)
+                # two "videos":
+                if video_no%2:
+                    counters.close_doc()
+                continue  # Bypass the usual tokenization process
 
             if tokenize is not None:
                 words = tokenize(text)
@@ -1310,7 +1340,7 @@ def get_tokenizers(
     Likewise whether (2) and (3) filter non-words is determined by args.filter_tokens.
 
     Argument names from `args` used:
-    - tokenized_files
+- tokenized_files
     - pos
     - form
     - extended_pos
@@ -1508,6 +1538,8 @@ def main() -> None:
             raise Exception(
                 '--limit--categories cannot be applied with --tokenized-files.'
                 )
+    if args.laborotv and not tokenized_files:
+        raise Exception('--laborotv cannot be applied without --tokenized-files.')
 
     # sublist: for file filtering (clean), and channel ids (frequencies)
 
@@ -1585,6 +1617,7 @@ def main() -> None:
                 storage,
                 sublist,
                 tokenized_files=tokenized_files,
+                laborotv=args.laborotv,
                 tokenize=tokenize,
                 categories=categories,
                 pos_tag=pos_tag,

@@ -164,8 +164,11 @@ To replicate our experiments you will need the following files placed in the dat
 - `Lexeed.txt`, file available from the CD-ROM accompanying [NTT Database Series: Lexical Properties of Japanese](https://ci.nii.ac.jp/ncid/BA44537988) by Amano Shigeaki and Kondo Tadahisa (1999-2022), i.e. the Heisei edition of the database.
 - `subimdb.tsv` file, which you can generate by first downloading and extracting the [SubIMDB](https://zenodo.org/records/2552407/files/SubIMDB_All_Individual.tar?download=1) corpus into the `SubIMDB_All_Individual` directory, and then compiling the frequency list with the following command:
 
+    ```python tubelex.py --lang en --frequencies --tokenized-files SubIMDB_All_Individual/subtitles -o data/subimdb.tsv```
+    
+- `laborotvspeech.tsv` file, which you can generate by first downloading and extracting the [LaboroTVSpeech](https://laboro.ai/activity/column/engineer/eg-laboro-tv-corpus-jp/) and [LaboroTVSpeech2](https://laboro.ai/activity/column/engineer/laborotvspeech2/) (both are free for academic use; you do not need to extract the `*.wav` files) as `laborotvspeech/LaboroTVSpeech_v1.0b` and `laborotvspeech/LaboroTVSpeech_v2.0b` directories, and then compiling the frequency list with the following command:
 
-    ```python tubelex.py --lang en -x --frequencies --tokenized-files SubIMDB_All_Individual/subtitles -o data/subimdb.tsv```
+    ```python tubelex.py --lang en --frequencies --laborotv --tokenized-files laborotvspeech -o data/laborotvspeech.tsv```
 
 - `espal.tsv` file created by following these steps:
 	1. Go to the [EsPal website](https://www.bcbl.eu/databases/espal/).

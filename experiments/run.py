@@ -303,13 +303,30 @@ def get_csj_freq_data(
         raise Exception(
             'CSJ data is only available in lemma form and default (MeCab) tokenization.'
             )
-
     return FrequencyData.from_file_url(
         filename='data/downloads/CSJ_frequencylist_suw_ver201803.zip',
         url=('https://repository.ninjal.ac.jp/record/3276/files/'
              'CSJ_frequencylist_suw_ver201803.zip'),
         total_row=False,
         cols=['lemma', 'frequency']
+        )
+
+
+def get_laborotv_freq_data(
+    dictionary: str = 'ipadic',
+    tokenization: Optional[str] = None,
+    form: str = 'surface'
+    ) -> FrequencyData:
+    if (
+        (dictionary != 'ipadic') or
+        (tokenization is not None) or (form != 'surface')
+        ):
+        raise Exception(
+            'LaboroTVSpeech data is only available in IPADIC tokenization (-d IPADIC).'
+            )
+    return FrequencyData.from_file_url(
+        filename='data/laborotvspeech.tsv',
+        total_row=True
         )
 
 
@@ -491,6 +508,11 @@ def parse_args() -> argparse.Namespace:
             )
         )
     parser.add_argument(
+        '--laborotvspeech', action='store_true', help=(
+            'Use LaboroTVSpeech for Japanese (requires --D ipadic).'
+            )
+        )
+    parser.add_argument(
         '--minus', action='store_true', help='Use opposite value instead of log.'
         )
     parser.add_argument(
@@ -550,11 +572,13 @@ STATS_CORPORA: dict[str, StatData] = {
     'Wikipedia':        StatData(get_wiki_freq_data,            ALL_LANGS),
     'OpenSubtitles':    StatData(get_opensubtitles_freq_data,   ALL_LANGS),
     'CSJ':              StatData(get_csj_freq_data,             {(): 'ja'}),
+    'LaboroTVSpeech1+2': StatData(get_laborotv_freq_data,       {(): 'ja'}),
     'SubIMDB':          StatData(get_subimdb_freq_data,         {(): 'en'}),
     'Alonso+2011':      StatData(get_alonso_freq_data,          {(): 'es'}),
     'EsPal':            StatData(get_espal_freq_data,           {(): 'es'}),
     'GINI':             StatData(get_gini_data,                 ['en', 'ja']),
-    'ACTIV-ES':         StatData(get_activ_es_data,             {(): 'es'})
+    'ACTIV-ES':         StatData(get_activ_es_data,             {(): 'es'}),
+    'Wikipedia':        StatData(get_tubelex_freq_data,         ALL_LANGS)
     }
 
 STATS_DATASETS: dict[str, StatData] = {
@@ -625,6 +649,7 @@ def main(args: argparse.Namespace) -> None:
     espal = args.espal
     alonso = args.alonso
     csj = args.csj
+    laborotvspeech = args.laborotvspeech
     f_lookups = None
 
     if args.stats:
@@ -732,15 +757,19 @@ def main(args: argparse.Namespace) -> None:
         lang2freq_data['ja'] = get_csj_freq_data(
             form=args.form, tokenization=args.tokenization
             )
+    if laborotvspeech:
+        assert 'ja' not in lang2freq_data
+        lang2freq_data['ja'] = get_laborotv_freq_data(
+            form=args.form, tokenization=args.tokenization, dictionary=args.dictionary
+            )
 
     all_langs = set(chain(
         subtlex, args.opensubtitles, args.tubelex,
         args.wikipedia, args.gini, args.wordfreq,
         ['en'] if subimdb else [],
         ['es'] if (espal or alonso or (activ_es_func is not None)) else [],
-        ['ja'] if csj else [],
+        ['ja'] if (csj or laborotvspeech) else [],
         ))
-
     lang2tokenize = {
         lang: get_tokenizers(
             lang=lang, tokenization=args.tokenization, full=True, args=args

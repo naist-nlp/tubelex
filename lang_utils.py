@@ -138,7 +138,7 @@ def add_tagger_arg_group(
         help='Dictionary directory for fugashi/MeCab.'
         )
     dic_group.add_argument(
-        '--dictionary', '-D', choices=('unidic', 'unidic-lite'), default=None,
+        '--dictionary', '-D', choices=('unidic', 'unidic-lite', 'ipadic'), default=None,
         help=(
             'Dictionary (installed as a Python package) for fugashi/MeCab.'
             'Default: unidic-lite.'
@@ -158,6 +158,9 @@ def tagger_from_args(
         if args.dictionary == 'unidic':
             import unidic  # type: ignore
             dicdir = unidic.DICDIR
+        elif args.dictionary == 'ipadic':
+            import ipadic  # type: ignore
+            dicdir = ipadic.DICDIR
         else:
             assert args.dictionary is None or args.dictionary == 'unidic-lite'
             import unidic_lite  # type: ignore

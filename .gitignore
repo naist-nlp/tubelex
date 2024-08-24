@@ -33,9 +33,12 @@ tubelex-*-removed-addresses.tsv
 # Subtitle files in eval samples
 /corpus/*
 
-# SubIMDB data
+# SubIMDB data, LaboroTVSpeech data
+/SubIMDB_All_Individual.tar.xz
 /SubIMDB_All_Individual.tar
 /SubIMDB_All_Individual/
+/laborotvspeech.zip
+/laborotvspeech
 
 # experiments/LCP data
 /data/*

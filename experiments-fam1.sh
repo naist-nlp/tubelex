@@ -44,6 +44,10 @@ done
 # python experiments/run.py --activ-es 								      --corr --fam es  		> experiments/fam-corr-activ-es.tsv
 # echo gini
 # python experiments/run.py --minus --gini en ja 							  --corr --fam en ja  	> experiments/fam-corr-gini.tsv
+# echo subimdb
+# python experiments/run.py --subimdb 									  --corr  --fam en   	> experiments/fam-corr-subimdb.tsv
+# echo laborotv
+# python experiments/run.py -D ipadic --laborotv 						      --corr --fam ja 		> experiments/fam-corr-laborotv.tsv
 
 
 # 

@@ -170,32 +170,7 @@ python experiments/run.py --activ-es 									 --corr --ldt es 	   > experiments
 # python experiments/run.py --subimdb 				                     --corr -z --ldt en       > experiments/ldtz-corr-subimdb.tsv
 
 
-echo
-echo '==========='
-echo 'Familiarity'
-echo '==========='
-echo
-for corpus in wordfreq tubelex tubelex-entertainment tubelex-comedy wiki os
-do
-	if [[ "$corpus" =~ - ]]
-	then
-		corpus_opt="--cat ${corpus#*-} --${corpus%-*}"
-	else
-		corpus_opt="--${corpus}"
-	fi
-	echo "$corpus"
-	python experiments/run.py $corpus_opt     id ja zh                --corr --fam id ja zh > experiments/fam-corr-${corpus}.tsv
-	if [[ "$corpus" =~ ^tubelex ]]
-	then
-		python experiments/run.py $corpus_opt id ja --form lemma 		  --corr --fam id ja    > experiments/fam-corr-${corpus}-lemma.tsv
-		python experiments/run.py $corpus_opt    ja --form base 		  --corr --fam    ja    > experiments/fam-corr-${corpus}-base.tsv
-		python experiments/run.py $corpus_opt id    --tokenization regex  --corr --fam id       > experiments/fam-corr-${corpus}-regex.tsv
-	fi
-done
-echo csj-lemma
-python experiments/run.py --form lemma --csj 						      --corr --fam ja 		> experiments/fam-corr-csj-lemma.tsv
-echo subtlex
-python experiments/run.py --subtlex zh                                --corr --fam zh    > experiments/fam-corr-subtlex.tsv
+# TODO TODO fix fam
 
 rm -r experiments/models experiments/output experiments/output.tsv
 
