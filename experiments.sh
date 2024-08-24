@@ -1,8 +1,6 @@
 #!/bin/bash
 
-
-#TODO remove from production:
-# Speed things up
+# Optionally speed things up, once MLSP datasets are downloaded from HF:
 # export HF_DATASETS_OFFLINE=1
 
 # Exit on error:
@@ -24,10 +22,7 @@ do
 	cache_opt=''
 	case "$variant" in
 	  '')
-		if [[ "$corpus" = 'tubelex' ]]
-		then
-			cache_opt="--cache"
-		fi
+		cache_opt='--cache'
 		var_opt=''
 		;;
 	  -lemma)
@@ -100,6 +95,11 @@ python experiments/run.py --minus --gini en ja --train   --mlsp english_lcp_labe
 python experiments/run.py --minus --gini en ja --metrics --mlsp english_lcp_labels japanese_lcp_labels > experiments/mlsp-results-gini.tsv
 python experiments/run.py --minus --gini en ja --corr    --mlsp english_lcp_labels japanese_lcp_labels > experiments/mlsp-corr-gini.tsv
 
+echo laborotv
+python experiments/run.py -D ipadic --laborotv --train   --mlsp japanese_lcp_labels
+python experiments/run.py -D ipadic --laborotv --metrics --mlsp japanese_lcp_labels > experiments/mlsp-results-laborotv.tsv
+python experiments/run.py -D ipadic --laborotv --corr    --mlsp japanese_lcp_labels > experiments/mlsp-corr-laborotv.tsv
+
 # Doesn't improve:
 # echo GINI-log
 # python experiments/run.py --minus-log --gini en ja --train  \
@@ -131,7 +131,7 @@ echo '==='
 echo 'LDT'
 echo '==='
 echo
-for corpus in tubelex wordfreq 
+for corpus in tubelex tubelex-entertainment tubelex-comedy wordfreq  wiki subtlex os
 do
 	cache_opt=''
 	if [[ "$corpus" =~ - ]]
@@ -164,10 +164,9 @@ echo "activ-es"
 python experiments/run.py --activ-es 									 --corr --ldt es 	   > experiments/ldt-corr-activ-es.tsv
 echo "subtlex-uk"
 python experiments/run.py --subtlex-uk                   --corr --ldt en > experiments/ldt-corr-subtlex-uk.tsv
-python experiments/run.py --subtlex-uk --tokenization regex --corr --ldt en    > experiments/ldt-corr-subtlex-uk-regex.tsv
 
 
-
+# We don't have z-scores ready for Spanish, and means are good enough to compare various corpora, although noisier:
 # echo
 # echo '==========='
 # echo 'LDT z score'
@@ -183,9 +182,96 @@ python experiments/run.py --subtlex-uk --tokenization regex --corr --ldt en    >
 # python experiments/run.py --subimdb 				                     --corr -z --ldt en       > experiments/ldtz-corr-subimdb.tsv
 
 
-# TODO TODO fix fam
+echo
+echo '==========='
+echo 'Familiarity'
+echo '==========='
+echo
+for corpus in tubelex tubelex-entertainment tubelex-comedy wordfreq wiki os
+do
+	cache_opt=''
+	if [[ "$corpus" =~ - ]]
+	then
+		corpus_opt="--cat ${corpus#*-} --${corpus%-*}"
+	else
+		corpus_opt="--${corpus}"
+		if [[ "$corpus" = 'tubelex' ]]
+		then
+			cache_opt="--cache"
+		fi
+	fi
+	echo "$corpus"
+	python experiments/run.py $cache_opt $corpus_opt id ja zh en es            --corr --fam id ja zh en es > experiments/fam-corr-${corpus}.tsv
+	if [[ "$corpus" =~ ^tubelex ]]
+	then
+		python experiments/run.py $corpus_opt id ja en es --form lemma         --corr --fam id ja en es  > experiments/fam-corr-${corpus}-lemma.tsv
+		python experiments/run.py $corpus_opt    ja       --form base 		   --corr --fam    ja        > experiments/fam-corr-${corpus}-base.tsv
+		python experiments/run.py $corpus_opt id    en es --tokenization regex --corr --fam id    en es  > experiments/fam-corr-${corpus}-regex.tsv
+	fi
+done
+echo subtlex-uk
+python experiments/run.py --subtlex-uk --corr --fam en > experiments/fam-corr-subtlex-uk.tsv
+echo csj-lemma
+python experiments/run.py --form lemma --csj 						      --corr --fam ja 		> experiments/fam-corr-csj-lemma.tsv
+echo subtlex
+python experiments/run.py --subtlex zh en es    						  --corr --fam zh en es > experiments/fam-corr-subtlex.tsv
+echo espal
+python experiments/run.py --espal 										  --corr --fam es 		> experiments/fam-corr-espal.tsv
+echo alonso
+python experiments/run.py --alonso 										  --corr --fam es 		> experiments/fam-corr-alonso.tsv
+echo activ-es
+python experiments/run.py --activ-es 								      --corr --fam es  		> experiments/fam-corr-activ-es.tsv
+echo gini
+python experiments/run.py --minus --gini en ja 							  --corr --fam en ja  	> experiments/fam-corr-gini.tsv
+echo subimdb
+python experiments/run.py --subimdb 									  --corr  --fam en   	> experiments/fam-corr-subimdb.tsv
+echo laborotv
+python experiments/run.py -D ipadic --laborotv 						      --corr --fam ja 		> experiments/fam-corr-laborotv.tsv
 
-rm -r experiments/models experiments/output experiments/output.tsv
+
+
+echo
+echo '=============================='
+echo 'Familiarity (Alternative Data)'
+echo '=============================='
+echo
+alt_opt='--glasgow --moreno-martinez'
+for corpus in tubelex tubelex-entertainment tubelex-comedy wordfreq wiki os
+do
+	cache_opt=''
+	if [[ "$corpus" =~ - ]]
+	then
+		corpus_opt="$alt_opt --cat ${corpus#*-} --${corpus%-*}"
+	else
+		corpus_opt="$alt_opt --${corpus}"
+		if [[ "$corpus" = 'tubelex' ]]
+		then
+			cache_opt="--cache"
+		fi
+	fi
+	echo "$corpus"
+	python experiments/run.py $cache_opt $corpus_opt     en es           --corr --fam en es > experiments/fam-alt-corr-${corpus}.tsv
+	if [[ "$corpus" =~ ^tubelex ]]
+	then
+		python experiments/run.py $corpus_opt en es --form lemma         --corr --fam en es  > experiments/fam-alt-corr-${corpus}-lemma.tsv
+		python experiments/run.py $corpus_opt en es --tokenization regex --corr --fam en es  > experiments/fam-alt-corr-${corpus}-regex.tsv
+	fi
+done
+echo subtlex-uk
+python experiments/run.py $alt_opt --subtlex-uk --corr --fam en > experiments/fam-alt-corr-subtlex-uk.tsv
+echo subtlex
+python experiments/run.py $alt_opt --subtlex en es    						      --corr --fam en es   > experiments/fam-alt-corr-subtlex.tsv
+echo espal
+python experiments/run.py $alt_opt --espal 										  --corr --fam es 		> experiments/fam-alt-corr-espal.tsv
+echo alonso
+python experiments/run.py $alt_opt --alonso 									  --corr --fam es 		> experiments/fam-alt-corr-alonso.tsv
+echo activ-es
+python experiments/run.py $alt_opt --activ-es 								      --corr --fam es  		> experiments/fam-alt-corr-activ-es.tsv
+echo gini
+python experiments/run.py $alt_opt --minus --gini en 							  --corr --fam en  	    > experiments/fam-alt-corr-gini.tsv
+
+# Optionally clean up:
+# rm -r experiments/models experiments/output experiments/output.tsv experiments/cache
 
 echo Aggregating
 
