@@ -158,7 +158,8 @@ def main():
     for results_id, best in (
         ('mlsp', 'min'),
         ('ldt', 'min'),
-        ('fam', 'max')
+        ('fam', 'max'),
+        ('fam-alt', 'max')
         ):
         r = limit_to_valid_corpora(pd.read_table(
             f'experiments/{results_id}-corr-aggregate-correlation.tsv',
@@ -186,7 +187,8 @@ def main():
             column_format=col_fmt,
             convert_css=True # for background_gradient
             )
-        with open(f'experiments/tables/{results_id}_corr.tex', 'w') as fo:
+        latex_id = results_id.replace('-', '_')
+        with open(f'experiments/tables/{latex_id}_corr.tex', 'w') as fo:
             fo.write(tex)
 
 

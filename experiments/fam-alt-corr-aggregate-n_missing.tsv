@@ -1,0 +1,19 @@
+	English	Spanish
+wordfreq	1.0	24.0
+Wikipedia	2.0	14.0
+SUBTLEX	10.0	130.0
+SUBTLEX-UK	5.0	
+OpenSubtitles	0.0	15.0
+GINI	270.0	
+ACTIV-ES		164.0
+Alonso+2011		183.0
+EsPal		65.0
+TUBELEX\textsubscript{default}	3.0	17.0
+TUBELEX\textsubscript{regex}	3.0	15.0
+TUBELEX\textsubscript{lemma}	2.0	16.0
+TUBELEX_entertainment	28.0	44.0
+TUBELEX_entertainment_L	16.0	39.0
+TUBELEX_entertainment_R	28.0	42.0
+TUBELEX_comedy	547.0	319.0
+TUBELEX_comedy_L	419.0	289.0
+TUBELEX_comedy_R	544.0	317.0

@@ -1,0 +1,19 @@
+	English	Spanish
+wordfreq	0.9621	0.9372
+Wikipedia	0.8519	0.8709
+SUBTLEX	0.8472	0.8685
+SUBTLEX-UK	0.8838	
+OpenSubtitles	0.8699	0.9215
+GINI	0.6956	
+ACTIV-ES		0.7915
+Alonso+2011		0.8041
+EsPal		0.7886
+TUBELEX\textsubscript{default}	1.0	1.0
+TUBELEX\textsubscript{regex}	0.9983	0.9859
+TUBELEX\textsubscript{lemma}	0.9647	0.9819
+TUBELEX_entertainment	0.9612	0.9634
+TUBELEX_entertainment_L	0.9281	0.9538
+TUBELEX_entertainment_R	0.9591	0.9495
+TUBELEX_comedy	0.8721	0.7953
+TUBELEX_comedy_L	0.848	0.7957
+TUBELEX_comedy_R	0.8699	0.7877

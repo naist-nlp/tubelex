@@ -42,6 +42,7 @@ CORPUS2ID = {
 TASK2NAME = {
     'ldt': 'Decision Time',
     'fam': 'Familiarity',
+    'fam-alt': 'Familiarity (Alternative Datasets)',
     'mlsp': 'Complexity',
     }
 
@@ -74,7 +75,7 @@ def main():
             ['correlation', 'corr_tubelex', 'n', 'n_missing'],
             False,
             task
-            ) for task in ('ldt', 'fam', 'mlsp'))
+            ) for task in ('ldt', 'fam', 'fam-alt', 'mlsp'))
             # Exclude 'ldtz' (LDT z-scores) : we have z-scores only for en and zh, and
             # the results are basically the same as for means ('ldt').
         ):
