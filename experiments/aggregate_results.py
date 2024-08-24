@@ -21,7 +21,7 @@ CORPUS2ID = {
     'GINI': 'gini',
     'GINI_R': 'gini-regex',
     'CSJ': 'csj-lemma',
-    'LaboroTVSpeech1+2': 'laborotv',
+    'LaboroTV1+2': 'laborotv',
     'ACTIV-ES': 'activ-es',
     'Alonso+2011': 'alonso',
     'EsPal': 'espal',

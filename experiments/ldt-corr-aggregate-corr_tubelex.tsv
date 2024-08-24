@@ -8,15 +8,16 @@ SUBTLEX_R		0.8558	0.8474
 SubIMDB		0.8632	
 OpenSubtitles	0.756	0.8753	0.9029
 GINI		0.6111	
+LaboroTV1+2			
 ACTIV-ES			0.7174
 Alonso+2011			0.7862
 EsPal			0.8988
 TUBELEX\textsubscript{default}	1.0	1.0	1.0
-TUBELEX\textsubscript{regex}		0.9946	1.0
-TUBELEX\textsubscript{lemma}		0.9811	0.9753
+TUBELEX\textsubscript{regex}		0.9988	0.9954
+TUBELEX\textsubscript{lemma}		0.9024	0.9651
 TUBELEX_entertainment	0.8737	0.9463	0.9529
-TUBELEX_entertainment_L		0.9418	0.9399
-TUBELEX_entertainment_R		0.9387	0.9527
+TUBELEX_entertainment_L		0.8577	0.9278
+TUBELEX_entertainment_R		0.9452	0.9488
 TUBELEX_comedy	0.4198	0.8061	0.7112
-TUBELEX_comedy_L		0.8438	0.7354
-TUBELEX_comedy_R		0.791	0.7104
+TUBELEX_comedy_L		0.756	0.716
+TUBELEX_comedy_R		0.8047	0.708

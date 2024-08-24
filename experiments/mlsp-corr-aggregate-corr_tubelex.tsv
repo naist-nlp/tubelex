@@ -10,19 +10,20 @@ SubIMDB_R	0.8832
 OpenSubtitles	0.9034	0.2894	0.8968
 GINI	0.5513	0.5494	
 GINI_R	0.5513		
-CSJ		0.5296	
+CSJ		0.7677	
+LaboroTV1+2		0.8444	
 ACTIV-ES			0.7651
 Alonso+2011			0.8662
 EsPal			0.8881
 TUBELEX\textsubscript{default}	1.0	1.0	1.0
-TUBELEX\textsubscript{regex}	0.9999		1.0
-TUBELEX\textsubscript{base}		0.9332	
-TUBELEX\textsubscript{lemma}	0.9848	0.5213	0.9587
+TUBELEX\textsubscript{regex}	0.9999		0.9766
+TUBELEX\textsubscript{base}		0.9508	
+TUBELEX\textsubscript{lemma}	0.8954	0.8843	0.8547
 TUBELEX_entertainment	0.9438	0.9716	0.9789
-TUBELEX_entertainment_L	0.9411	0.5159	0.9406
-TUBELEX_entertainment_B		0.9018	
-TUBELEX_entertainment_R	0.944		0.9788
+TUBELEX_entertainment_L	0.8505	0.8478	0.8344
+TUBELEX_entertainment_B		0.9205	
+TUBELEX_entertainment_R	0.944		0.9557
 TUBELEX_comedy	0.8322	0.8525	0.8015
-TUBELEX_comedy_L	0.8649	0.4721	0.8281
-TUBELEX_comedy_B		0.794	
-TUBELEX_comedy_R	0.8325		0.7999
+TUBELEX_comedy_L	0.7594	0.7415	0.7149
+TUBELEX_comedy_B		0.8048	
+TUBELEX_comedy_R	0.8325		0.7823

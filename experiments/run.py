@@ -388,11 +388,26 @@ def get_kytea_tokenizer(lang: str) -> Callable[[str], list[str]]:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     action = parser.add_mutually_exclusive_group()
-    action.add_argument('--stats', action='store_true')
-    action.add_argument('--stats-datasets', default='experiments/stats-datasets.csv')
-    action.add_argument('--stats-corpora', default='experiments/stats-corpora.csv')
-    action.add_argument('--train', action='store_true')
-    action.add_argument('--correlation', action='store_true')
+    action.add_argument('--stats', action='store_true',
+                        help='Write stats for corpora and datasets.')
+    action.add_argument('--train', action='store_true',
+                        help='Train linear regression.')
+    action.add_argument('--correlation', action='store_true',
+                        help='Compute correlation.')
+
+
+    parser.add_argument('--stats-datasets', default='experiments/stats-datasets.csv',
+                        help='Output CSV file for dataset stats.')
+    parser.add_argument('--stats-corpora', default='experiments/stats-corpora.csv',
+                        help='Output CSV file for corpus stats.')
+
+    parser.add_argument('--cache-tubelex', action='store_true', help=(
+        'Cache TUBELEX frequencies for correlation pvalue computation.'
+        ))
+    parser.add_argument('--tubelex-cache', default='experiments/cache', help=(
+        'Cache directory for TUBELEX frequencies (--cache-tubelex).'
+        ))
+
     parser.add_argument(
         '--metrics', '-m', action='store_true',
         help='Print metrics when doing inference.'
@@ -572,7 +587,7 @@ STATS_CORPORA: dict[str, StatData] = {
     'Wikipedia':        StatData(get_wiki_freq_data,            ALL_LANGS),
     'OpenSubtitles':    StatData(get_opensubtitles_freq_data,   ALL_LANGS),
     'CSJ':              StatData(get_csj_freq_data,             {(): 'ja'}),
-    'LaboroTVSpeech1+2': StatData(get_laborotv_freq_data,       {(): 'ja'}),
+    'LaboroTV1+2': StatData(get_laborotv_freq_data,       {(): 'ja'}),
     'SubIMDB':          StatData(get_subimdb_freq_data,         {(): 'en'}),
     'Alonso+2011':      StatData(get_alonso_freq_data,          {(): 'es'}),
     'EsPal':            StatData(get_espal_freq_data,           {(): 'es'}),
@@ -642,6 +657,8 @@ def main(args: argparse.Namespace) -> None:
 
     output_files = args.output_files
     model_dir = args.models
+    cache_tubelex = args.cache_tubelex
+    tubelex_cache_dir = args.tubelex_cache
     train = args.train
     correlation = args.correlation
     read_gold = train or correlation
@@ -669,6 +686,24 @@ def main(args: argparse.Namespace) -> None:
             'experiments/output.tsv' if (len(input_sets) == 1) else
             'experiments/output'
             ]
+
+    if cache_tubelex:
+        if not (args.tubelex and
+                args.category is None and
+                args.tokenization is None and
+                args.dictionary is None and
+                args.form == 'surface'
+                ):
+            raise Exception(
+                f'Non-default arguments incompatible with --cache-tubelex:\n'
+                f'--tubelex: {args.tubelex}\n'
+                f'--category: {args.category}\n'
+                f'--tokenization: {args.tokenization}\n'
+                f'--dictionary: {args.dictionary}\n'
+                f'--form: {args.form}'
+                )
+        os.makedirs(tubelex_cache_dir, exist_ok=True)
+
 
     if train:
         if output_files:
@@ -776,29 +811,6 @@ def main(args: argparse.Namespace) -> None:
             )[1] for lang in all_langs
         }
 
-    if correlation:
-        lang2tubelex_for_corr = {
-            lang: get_tubelex_freq_data(
-                lang,  # default tokenization/form
-                ) for lang in all_langs
-            }
-
-        def agg_tubelex_frequency_for_corr(s: str, lang: str) -> float:
-            s = nfkc_lower(s)
-            tokens = lang2tokenize[lang](s)
-            tubelex_for_corr = lang2tubelex_for_corr[lang]
-            f = min(
-                (tubelex_for_corr.smooth_frequency_missing(t)[0]  # only frequency
-                 for t in tokens),
-                default=0   # Accept empty tokens => return f1
-                )
-
-            # Without tokenization:
-            f1 = tubelex_for_corr.smooth_frequency_missing(s)[0]
-            better_without_tokenization = (f1 > f)
-
-            return f1 if better_without_tokenization else f
-
     def tokenize(s, lang):
         if (tokenize := lang2corpus_specific_tokenizer.get(lang)):
             return tokenize(s)
@@ -875,7 +887,7 @@ def main(args: argparse.Namespace) -> None:
 
     for input_id, path_out in zip_longest(input_sets, output_files):
         lang2data_targets_freq_tubelex_missing_gold = defaultdict(
-            lambda: ([], [], [], [], [], [])
+            lambda: ([], [], [], [], [])
             )
         if mlsp_subsets:
             try:
@@ -901,7 +913,7 @@ def main(args: argparse.Namespace) -> None:
                 lang, idx_str = instance['id'].split('_', 1)
                 assert 2 <= len(lang) <= 3, f'Unexpected language: {lang}'
                 (
-                    data, targets, frequencies, tubelex_f, missing, gold
+                    data, targets, frequencies, missing, gold
                     ) = lang2data_targets_freq_tubelex_missing_gold[lang]
                 t = instance['target']
                 if len(instance) == 5:
@@ -911,8 +923,6 @@ def main(args: argparse.Namespace) -> None:
                 data.append([str(v) for v in instance.values()])
                 targets.append(t)
                 frequencies.append(f)
-                if correlation:
-                    tubelex_f.append(agg_tubelex_frequency_for_corr(t, lang))
                 missing.append(miss)
                 if len(instance) == 5:
                     gold.append(g)
@@ -929,7 +939,7 @@ def main(args: argparse.Namespace) -> None:
                     )
                 )
             (
-                data, targets, frequencies, tubelex_f, missing, gold
+                data, targets, frequencies, missing, gold
                 ) = lang2data_targets_freq_tubelex_missing_gold[lang]
             for word, ldt in dataset.items():
                 f, miss = agg_frequency_missing(word, lang)
@@ -937,7 +947,6 @@ def main(args: argparse.Namespace) -> None:
                 targets.append(word)
                 frequencies.append(f)
                 assert correlation
-                tubelex_f.append(agg_tubelex_frequency_for_corr(word, lang))
                 missing.append(miss)
                 gold.append(ldt)
 
@@ -950,7 +959,7 @@ def main(args: argparse.Namespace) -> None:
             fo = None
 
         for lang, (
-            data, targets, frequencies, tubelex_f, missing, gold
+            data, targets, frequencies, missing, gold
             ) in lang2data_targets_freq_tubelex_missing_gold.items():
             miss_t = [t for t, m in zip(targets, missing) if m]
             if args.verbose:
@@ -969,7 +978,37 @@ def main(args: argparse.Namespace) -> None:
 
             if correlation:
                 assert c is not None
-                logf_tubelex = np.log10(np.array(tubelex_f))
+
+                cache_name = f'tubelex-{lang}-' + (
+                    'mlsp' if mlsp_subsets else
+                    'ldt' if ldt_langs else
+                    'fam')
+                if ldt_langs:
+                    if args.zscore:
+                        cache_name += '.zscore'
+                elif not mlsp_subsets:
+                    if args.glasgow:
+                        cache_name += '.glasgow'
+                    if args.clark_paivio:
+                        cache_name += '.clark_paivio'
+                    if args.moreno_martinez:
+                        cache_name += '.moreno_martinez'
+                cache_path = os.path.join(tubelex_cache_dir, cache_name + '.npy')
+
+                if cache_tubelex:
+                    np.save(cache_path, logf, allow_pickle=False)
+                    logf_tubelex = logf
+                else:
+                    if not os.path.exists(cache_path):
+                        print(
+                            f'Warning: No cached TUBELEX frequencies at {cache_path}.'
+                            f'Will use NA values to compare with instead.',
+                            file=sys.stderr
+                            )
+                        logf_tubelex = np.full_like(logf, np.nan)
+                    else:
+                        logf_tubelex = np.load(cache_path, allow_pickle=False)
+
                 r = pearson_r(logf, c)
                 r_tubelex = pearson_r(logf, logf_tubelex)
                 n = len(logf)

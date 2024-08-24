@@ -1,2 +1,2 @@
 file	language	correlation	corr_tubelex	n	n_missing
-en	English	-0.6824	0.8632	38130	1630
+japanese_lcp_labels	Japanese	-0.6096	0.8444	570	10

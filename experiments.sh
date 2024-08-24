@@ -21,8 +21,13 @@ for variant in '' -lemma -base -regex
 do
 	langs="es en ja"
 	mlsp="$all"	
+	cache_opt=''
 	case "$variant" in
 	  '')
+		if [[ "$corpus" = 'tubelex' ]]
+		then
+			cache_opt="--cache"
+		fi
 		var_opt=''
 		;;
 	  -lemma)
@@ -42,7 +47,7 @@ do
 	echo tubelex$variant
 	python experiments/run.py $var_opt --tubelex $langs --train   --mlsp $mlsp
 	python experiments/run.py $var_opt --tubelex $langs --metrics --mlsp $mlsp > experiments/mlsp-results-tubelex${variant}.tsv
-	python experiments/run.py $var_opt --tubelex $langs --corr    --mlsp $mlsp > experiments/mlsp-corr-tubelex${variant}.tsv
+	python experiments/run.py $cache_opt $var_opt --tubelex $langs --corr    --mlsp $mlsp > experiments/mlsp-corr-tubelex${variant}.tsv
 	
 	echo tubelex-entertainment$variant
 	python experiments/run.py $var_opt --tubelex $langs --cat entertainment --train --mlsp $mlsp
@@ -126,16 +131,21 @@ echo '==='
 echo 'LDT'
 echo '==='
 echo
-for corpus in wordfreq tubelex tubelex-entertainment tubelex-comedy wiki subtlex os
+for corpus in tubelex wordfreq 
 do
+	cache_opt=''
 	if [[ "$corpus" =~ - ]]
 	then
 		corpus_opt="--cat ${corpus#*-} --${corpus%-*}"
 	else
 		corpus_opt="--${corpus}"
+		if [[ "$corpus" = 'tubelex' ]]
+		then
+			cache_opt="--cache"
+		fi
 	fi
 	echo "$corpus"
-	python experiments/run.py $corpus_opt     en es zh                   --corr --ldt en es zh > experiments/ldt-corr-${corpus}.tsv
+	python experiments/run.py $cache_opt $corpus_opt     en es zh		 --corr --ldt en es zh > experiments/ldt-corr-${corpus}.tsv
 	if [[ "$corpus" =~ ^tubelex ]]
 	then
 		python experiments/run.py $corpus_opt en es --form lemma         --corr --ldt en es    > experiments/ldt-corr-${corpus}-lemma.tsv
@@ -152,6 +162,9 @@ echo "alonso"
 python experiments/run.py --alonso 										 --corr --ldt es	   > experiments/ldt-corr-alonso.tsv
 echo "activ-es"
 python experiments/run.py --activ-es 									 --corr --ldt es 	   > experiments/ldt-corr-activ-es.tsv
+echo "subtlex-uk"
+python experiments/run.py --subtlex-uk                   --corr --ldt en > experiments/ldt-corr-subtlex-uk.tsv
+python experiments/run.py --subtlex-uk --tokenization regex --corr --ldt en    > experiments/ldt-corr-subtlex-uk-regex.tsv
 
 
 

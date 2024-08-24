@@ -15,16 +15,21 @@ echo '==========='
 echo 'Familiarity'
 echo '==========='
 echo
-for corpus in wordfreq tubelex tubelex-entertainment tubelex-comedy wiki os
+for corpus in tubelex tubelex-entertainment tubelex-comedy wordfreq wiki os
 do
+	cache_opt=''
 	if [[ "$corpus" =~ - ]]
 	then
 		corpus_opt="$alt_opt --cat ${corpus#*-} --${corpus%-*}"
 	else
 		corpus_opt="$alt_opt --${corpus}"
+		if [[ "$corpus" = 'tubelex' ]]
+		then
+			cache_opt="--cache"
+		fi
 	fi
 	echo "$corpus"
-	python experiments/run.py $corpus_opt     en es                      --corr --fam en es > experiments/fam-alt-corr-${corpus}.tsv
+	python experiments/run.py $cache_opt $corpus_opt     en es           --corr --fam en es > experiments/fam-alt-corr-${corpus}.tsv
 	if [[ "$corpus" =~ ^tubelex ]]
 	then
 		python experiments/run.py $corpus_opt en es --form lemma         --corr --fam en es  > experiments/fam-alt-corr-${corpus}-lemma.tsv

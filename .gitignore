@@ -52,6 +52,10 @@ tubelex-*-removed-addresses.tsv
 !/data/mrc.csv
 !/data/mrc_README.txt
 /experiments/zz-*
+/experiments/models/*
+/experiments/output/*
+/experiments/output.tsv
+/experiments/cache/*
 
 # large files
 /fasttext/

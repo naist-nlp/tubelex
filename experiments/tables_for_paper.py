@@ -16,7 +16,7 @@ VALID_CORPORA = {
     'OpenSubtitles': 'os',
     'GINI': 'gini',
     'CSJ': 'csj-lemma',
-    'LaboroTVSpeech1+2': 'laborotv',
+    'LaboroTV1+2': 'laborotv',
     'ACTIV-ES': 'activ-es',
     'EsPal': 'espal',
     'Alonso+2011': 'alonso',
