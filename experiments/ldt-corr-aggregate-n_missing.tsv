@@ -1,17 +1,19 @@
 	Chinese	English	Spanish
-wordfreq	27	941	10169
-Wikipedia	84	229	6238
-Wikipedia_R		229.0	6238.0
+BNC-Spoken		10713.0	
+CREA-Spoken			27326.0
+HKUST/MTS	6113.0		
+ACTIV-ES			28496.0
+EsPal			10449.0
+LaboroTV1+2			
+OpenSubtitles	52	451	8027
+SubIMDB		1630.0	
 SUBTLEX	0	3469	25774
 SUBTLEX-UK		2969.0	
 SUBTLEX_R		3469.0	25774.0
-SubIMDB		1630.0	
-OpenSubtitles	52	451	8027
 GINI		16915.0	
-LaboroTV1+2			
-ACTIV-ES			28496.0
-Alonso+2011			27326.0
-EsPal			10449.0
+Wikipedia	84	229	6238
+Wikipedia_R		229.0	6238.0
+wordfreq	27	941	10169
 TUBELEX\textsubscript{default}	373	1175	8831
 TUBELEX\textsubscript{regex}		1172.0	8911.0
 TUBELEX\textsubscript{lemma}		1016.0	7270.0

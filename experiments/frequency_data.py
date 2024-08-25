@@ -6,6 +6,7 @@ from collections import Counter
 from collections.abc import Sequence, Iterator
 from urllib.request import urlretrieve
 import lzma
+import gzip
 import io
 import sys
 import os
@@ -42,10 +43,11 @@ class FrequencyDataSpec(FrequencyDataSpecBase, total=False):
     # optional (total=False):
     url: str
     zip_args: Union[tuple[str], tuple[str, str]]
-    total_row: bool
+    total_row: bool | str  # pass str for a key different from TOTAL_KEY
     total_header: bool
-    header: bool
+    header: bool | Sequence[str]
     cols: Sequence[str]
+    delimiter: str
     cased: bool
     to_lower: bool
 
@@ -128,6 +130,7 @@ FREQ_DATA_CORPORA   = ['subtitles', 'wiki']
 TOTAL_KEY = '[TOTAL]'
 COLS_DEFAULT    = 3  # (word, frequency, contextual diversity)
 COLS_RANGE      = range(2, 4)   # at least (word, frequency)
+DEFAULT_DELIMITER = '\t'
 
 
 @contextmanager
@@ -178,19 +181,22 @@ class FrequencyData(NamedTuple):
     @staticmethod
     def load(
         file: TextIO,
-        total_row: bool = False,
+        total_row: bool | str = False,  # pass str for a key different from TOTAL_KEY
         total_header: bool = False,
-        header: bool = True,
+        header: bool | Sequence[str] = True,
         cols: Optional[Sequence[str]] = None,
+        delimiter: str = DEFAULT_DELIMITER,
         cased: bool = False,
         to_lower: bool = False,
         verbose: bool = False,
-        filename: Optional[str] = None  # for exceptions
+        filename: Optional[str] = None,  # for exceptions
+        ignore_errors: bool = False
         ) -> 'FrequencyData':
         f: Counter[str] = Counter()
         cd: Optional[Counter[str]]
         f_total: int
         cd_total: Optional[int]
+        n_ignored_errors: int = 0
 
         exc_fn = f'"{filename}": ' if (filename is not None) else ''
 
@@ -216,39 +222,55 @@ class FrequencyData(NamedTuple):
 
         indices: Sequence[int] = range(COLS_DEFAULT)
         if header:
-            for line in file:
-                # ignore any number of opening comments that start with a '#'
-                if line.startswith('#'):
-                    continue
-                if cols is not None:
-                    header_cols = line.rstrip('\n').split('\t')
-                    indices = [header_cols.index(c) for c in cols]
-                # else just ignore
-                break
+            if isinstance(header, Sequence):
+                header_cols = header
+            else:
+                assert isinstance(header, bool)
+                for line in file:
+                    # ignore any number of opening comments that start with a '#'
+                    if line.startswith('#'):
+                        continue
+                    if cols is not None:
+                        header_cols = line.rstrip('\n').split(delimiter)
+                    # else just ignore
+                    break
+            if cols:
+                indices = [header_cols.index(c) for c in cols]
 
         cd = Counter() if (len(indices) == COLS_DEFAULT) else None
 
+        freq = None
         for line in file:
-            line = line.rstrip('\n\t')
+            line = line.rstrip(f'\n{delimiter}')
             if not line:
                 continue    # Ignore lines only consisting of tabs/empty (SUBTLEX-UK)
-            fields = line.split('\t')
-            word, freq, *opt_docs = (fields[i] for i in indices)
+            fields = line.split(delimiter)
+            try:
+                word, freq, *opt_docs = (fields[i] for i in indices)
 
-            if to_lower:
-                word = word.lower()
-
-            # Use += to allow for possible lowercasing via `to_lower`:
-            f[word]         += int(freq)
-            if cd is not None:
-                wcd = int(*opt_docs)
                 if to_lower:
-                    cd[word] = max(cd[word], wcd)
-                cd[word]    += wcd
+                    word = word.lower()
+
+                # Use += to allow for possible lowercasing via `to_lower`:
+                f[word]         += int(freq)
+                if cd is not None:
+                    wcd = int(*opt_docs)
+                    if to_lower:
+                        cd[word] = max(cd[word], wcd)
+                    cd[word]    += wcd
+            except Exception:
+                if ignore_errors:
+                    n_ignored_errors += 1
+                else:
+                    raise Exception(
+                        f'{exc_fn}Error parsing freq={freq!r} on line "{line}" '
+                        f'using indices={indices}.'
+                        )
 
         if total_row:
-            f_total         = f.pop(TOTAL_KEY)
-            cd_total        = cd.pop(TOTAL_KEY) if (cd is not None) else None
+            total_key = total_row if isinstance(total_row, str) else TOTAL_KEY
+            f_total         = f.pop(total_key)
+            cd_total        = cd.pop(total_key) if (cd is not None) else None
         elif not total_header:
             f_total         = sum(f.values())
             cd_total        = None
@@ -274,10 +296,11 @@ class FrequencyData(NamedTuple):
                 f'- {n_total} words in file{lcase_msg}\n'
                 f'- totals ({total_source}): f={f_total}, cd={cd_total}\n'
                 )
+            if n_ignored_errors:
+                sys.stderr.write(f'- {n_ignored_errors} ignored errors\n')
 
         fd = FrequencyData(f, cd, f_total, cd_total)
         return fd
-
 
     def smooth_frequency_missing(self, word: str) -> tuple[float, bool]:
         '''
@@ -290,12 +313,11 @@ class FrequencyData(NamedTuple):
                               #tokens + #types
         '''
         f  = self.f
-        count_w = f.get(word, 0)
+        count_w = f[word]
         return (
             (count_w + 1) / (self.f_total + len(f)),    # smooth_frequency
             not count_w                                 # missing
             )
-
 
     @staticmethod
     def _open(
@@ -304,6 +326,8 @@ class FrequencyData(NamedTuple):
         ) -> ContextManager[TextIO]:
         if filename.endswith('.xz'):
             return lzma.open(filename, 'rt')
+        if filename.endswith('.gz'):
+            return gzip.open(filename, 'rt')
         if filename.endswith('.zip'):
             return single_text_file_zip(filename, *zip_args)
         return open(filename)
@@ -312,18 +336,20 @@ class FrequencyData(NamedTuple):
     def from_file(
         filename: str,
         zip_args=(),
-        total_row: bool = False,
+        total_row: bool | str = False,  # pass str for a key different from TOTAL_KEY
         total_header: bool = False,
-        header: bool = True,
+        header: bool | Sequence[str] = True,
         cols: Optional[Sequence[str]] = None,
+        delimiter: str = DEFAULT_DELIMITER,
         cased: bool = False,
         to_lower: bool = False,
-        verbose: bool = False
+        verbose: bool = False,
+        ignore_errors: bool = False
         ) -> 'FrequencyData':
         with FrequencyData._open(filename, zip_args) as file:
             return FrequencyData.load(
-                file, total_row, total_header, header, cols, cased, to_lower,
-                verbose=verbose, filename=filename
+                file, total_row, total_header, header, cols, delimiter, cased, to_lower,
+                verbose=verbose, filename=filename, ignore_errors=ignore_errors
                 )
 
     @staticmethod
@@ -331,13 +357,15 @@ class FrequencyData(NamedTuple):
         filename: str,
         url: Optional[str] = None,
         zip_args=(),
-        total_row: bool = False,
+        total_row: bool | str = False,  # pass str for a key different from TOTAL_KEY
         total_header: bool = False,
-        header: bool = True,
+        header: bool | Sequence[str] = True,
         cols: Optional[Sequence[str]] = None,
+        delimiter: str = DEFAULT_DELIMITER,
         cased: bool = False,
         to_lower: bool = False,
-        force_verbose: bool = False
+        force_verbose: bool = False,
+        ignore_errors: bool = False
         ) -> 'FrequencyData':
 
         verbose: bool = force_verbose
@@ -348,8 +376,8 @@ class FrequencyData(NamedTuple):
             sys.stderr.write(f'Local file "{filename}".\n')
 
         return FrequencyData.from_file(
-            filename, zip_args, total_row, total_header, header, cols, cased, to_lower,
-            verbose=verbose
+            filename, zip_args, total_row, total_header, header, cols, delimiter, cased,
+            to_lower, verbose=verbose, ignore_errors=ignore_errors
             )
 
     @staticmethod
@@ -415,6 +443,32 @@ class FrequencyData(NamedTuple):
             _fd_cache[(corpus, lang)] = fd
 
         return fd
+
+    def difference(self, other: 'FrequencyData') -> 'FrequencyData':
+        f = self.f.copy()
+        f.subtract(other.f)
+        negw = [w for w, c in f.items() if c < 0]
+        if negw:
+            raise ValueError(f'Words have negative frequency after subtraction: {negw}')
+        f_total = self.f_total - other.f_total
+        if f_total < 0:
+            raise ValueError(f'Negative total frequency after subtraction: {f_total}')
+
+        cd = None
+        cd_total = None
+        if (self.cd is None) != (other.cd is None):
+            raise ValueError('One of the objects has CD, while the other does not')
+        if self.cd is not None:
+            cd = self.cd.copy()
+            cd.subtract(other.cd)
+            negw = [w for w, c in cd.items() if c < 0]
+            if negw:
+                raise ValueError(f'Words have negative CD after subtraction: {negw}')
+            cd_total = self.cd_total - other.cd_total
+            if cd_total < 0:
+                raise ValueError(f'Negative total CD after subtraction: {cd_total}')
+
+        return FrequencyData(f, cd, f_total, cd_total)
 
 
 if __name__ == '__main__':

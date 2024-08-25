@@ -8,23 +8,29 @@ from corrstats import dependent_corr
 
 TUBELEX = 'TUBELEX\\textsubscript{default}'
 CORPUS2ID = {
-    'wordfreq': 'wordfreq',
-    'wordfreq_R': 'wordfreq-regex',
-    'Wikipedia': 'wiki',
-    'Wikipedia_R': 'wiki-regex',
+    'BNC-Spoken': 'spoken-bnc',
+    'CREA-Spoken': 'alonso',
+    'CSJ': 'csj-lemma',
+    'HKUST/MTS': 'hkust-mtsc',
+
+    'ACTIV-ES': 'activ-es',
+    'EsPal': 'espal',
+    'LaboroTV1+2': 'laborotv',
+    'OpenSubtitles': 'os',
+    'SubIMDB': 'subimdb',
+    'SubIMDB_R': 'subimdb-regex',
     'SUBTLEX': 'subtlex',
     'SUBTLEX-UK': 'subtlex-uk',
     'SUBTLEX_R': 'subtlex-regex',
-    'SubIMDB': 'subimdb',
-    'SubIMDB_R': 'subimdb-regex',
-    'OpenSubtitles': 'os',
+
+
     'GINI': 'gini',
     'GINI_R': 'gini-regex',
-    'CSJ': 'csj-lemma',
-    'LaboroTV1+2': 'laborotv',
-    'ACTIV-ES': 'activ-es',
-    'Alonso+2011': 'alonso',
-    'EsPal': 'espal',
+    'Wikipedia': 'wiki',
+    'Wikipedia_R': 'wiki-regex',
+    'wordfreq': 'wordfreq',
+    'wordfreq_R': 'wordfreq-regex',
+
     'TUBELEX\\textsubscript{default}': 'tubelex',
     'TUBELEX\\textsubscript{regex}': 'tubelex-regex',
     'TUBELEX\\textsubscript{base}': 'tubelex-base',
@@ -64,15 +70,20 @@ def dependent_corr_pvalue_or_nan(
         return 1
     return p
 
+LANG2ALT_DESC = {
+    'English': '(Glasgow)',
+    'Spanish': '(Moreno-Martínez)'
+    }
 
 def main():
-    task_name2df = {}
-    task_name2df_p = {}
+    # Unnecessary:
+    # task_name2df = {}
+    # task_name2df_p = {}
     for filename, cols, add_mlsp, task in (
         ('experiments/mlsp-results', ['R2'], True, None),
         *((
             f'experiments/{task}-corr',
-            ['correlation', 'corr_tubelex', 'n', 'n_missing'],
+            ['correlation', 'corr_tubelex', 'n', 'n_missing', 'corr_without_missing'],
             False,
             task
             ) for task in ('ldt', 'fam', 'fam-alt', 'mlsp'))
@@ -88,7 +99,8 @@ def main():
                 print(f'Reading {path}')
                 df = pd.read_table(path, index_col='language')
                 for col in cols:
-                    d[col][corpus] = df[col]
+                    if col in df:
+                        d[col][corpus] = df[col]
 
         if add_mlsp:
             print(f'Reading MLSP shared task data')
@@ -100,6 +112,13 @@ def main():
 
         for col, data_dict in d.items():
             combined = pd.DataFrame(data_dict).transpose()
+
+            if task == 'fam-alt':
+                combined.columns = pd.MultiIndex.from_arrays([
+                    combined.columns,
+                    [LANG2ALT_DESC[lang] for lang in combined.columns]
+                    ], names=None)
+
             combined.to_csv(f'{filename}-aggregate-{col}.tsv', sep='\t')
             combined_dfs[col] = combined
 
@@ -123,17 +142,19 @@ def main():
             df_pvalues.to_csv(f'{filename}-aggregate-pvalues.tsv', sep='\t',
                               float_format='%4f')
 
-            task_name = TASK2NAME[task]
-            task_name2df[task_name] = combined_dfs['correlation']
-            task_name2df_p[task_name] = df_pvalues
+            # unnecessary
+            # task_name = TASK2NAME[task]
+            # task_name2df[task_name] = combined_dfs['correlation']
+            # task_name2df_p[task_name] = df_pvalues
 
-    df = pd.concat(task_name2df.values(), axis=1, keys=task_name2df.keys())
-    df_p = pd.concat(task_name2df_p.values(), axis=1, keys=task_name2df_p.keys())
-
-    df.to_csv(f'all-aggregate-correlation.tsv', sep='\t',
-                      float_format='%4f')
-    df_pvalues.to_csv(f'all-aggregate-pvalues.tsv', sep='\t',
-                      float_format='%4f')
+    # unnecessary
+    # df = pd.concat(task_name2df.values(), axis=1, keys=task_name2df.keys())
+    # df_p = pd.concat(task_name2df_p.values(), axis=1, keys=task_name2df_p.keys())
+    #
+    # df.to_csv(f'all-aggregate-correlation.tsv', sep='\t',
+    #                   float_format='%4f')
+    # df_pvalues.to_csv(f'all-aggregate-pvalues.tsv', sep='\t',
+    #                   float_format='%4f')
 
 
 if __name__ == '__main__':

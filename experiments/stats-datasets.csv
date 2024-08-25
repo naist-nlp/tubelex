@@ -1,5 +1,5 @@
-,English,Spanish,Chinese,Japanese,Indonesian,English (Glasgow),Spanish (Moreno-Martinez+2014)
-ldt,38130,45190,12576,,,,
-mlsp,570,593,,570,,,
-fam,4923,1400,24325,27935,1490,,
-fam-alt,,,,,,4682,820
+,Chinese,English,English (Glasgow),Indonesian,Japanese,Spanish,Spanish (Moreno-Martínez)
+ldt,12576,38130,,,,45190,
+mlsp,,570,,,570,593,
+fam,24325,4923,,1490,27935,1400,
+fam-alt,,,4682,,,,820

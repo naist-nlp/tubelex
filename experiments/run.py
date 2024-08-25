@@ -325,16 +325,49 @@ def get_laborotv_freq_data(
             'LaboroTVSpeech data is only available in IPADIC tokenization (-d IPADIC).'
             )
     return FrequencyData.from_file_url(
-        filename='data/laborotvspeech.tsv',
-        total_row=True
+        filename='data/laborotvspeech.tsv', total_row=True
         )
 
 
 def get_subimdb_freq_data() -> FrequencyData:
-    return FrequencyData.from_file_url(
-        filename='data/subimdb.tsv',
-        total_row=True
+    return FrequencyData.from_file_url(filename='data/subimdb.tsv', total_row=True)
+
+
+def get_hkust_mtsc_freq_data() -> FrequencyData:
+    return FrequencyData.from_file_url(filename='data/hkust-mtsc.tsv', total_row=True)
+
+
+def get_bnc_spoken_written_freq_data(
+    spoken: bool = False,
+    written: bool = False
+    ) -> FrequencyData:
+
+    assert written or spoken    # at least one of them
+
+    if spoken:
+        fd  = FrequencyData.from_file_url(
+            url='https://www.kilgarriff.co.uk/BNClists/all.num.gz',
+            filename='data/downloads/bnc_all.num.gz',
+            header=['freq','word','pos','cd'], cols=['word','freq','cd'], delimiter=' ',
+            total_row='!!WHOLE_CORPUS'
+            )
+        if written:
+            return fd
+
+    assert written != spoken  # either spoken or written
+
+    fdw = FrequencyData.from_file_url(
+        url='https://www.kilgarriff.co.uk/BNClists/written.num.gz',
+        filename='data/downloads/bnc_written.num.gz',
+        header=['freq','word','pos','cd'], cols=['word','freq','cd'], delimiter=' ',
+        total_row='!!ANY'
         )
+    if written:
+        return fdw
+
+    assert spoken and not written
+
+    return fd.difference(fdw)
 
 
 def get_espal_freq_data() -> FrequencyData:
@@ -507,14 +540,18 @@ def parse_args() -> argparse.Namespace:
         '--subimdb', action='store_true', help='Use SubIMDB for English.'
         )
     parser.add_argument(
+        '--spoken-bnc', action='store_true',
+        help='Use spoken portion of BNC for English.'
+        )
+    parser.add_argument(
         '--espal', action='store_true', help='Use EsPal for Spanish.'
         )
     parser.add_argument(
         '--activ-es', action='store_true', help='Use ACTIV-ES for Spanish.'
         )
     parser.add_argument(
-        '--alonso', action='store_true', help=(
-            'Use oral frequencies by Alonso et al. (2011) for Spanish.'
+        '--alonso', '--spoken-crea', action='store_true', help=(
+            'Use oral frequencies from CREA by Alonso et al. (2011) for Spanish.'
             )
         )
     parser.add_argument(
@@ -526,6 +563,9 @@ def parse_args() -> argparse.Namespace:
         '--laborotvspeech', action='store_true', help=(
             'Use LaboroTVSpeech for Japanese (requires --D ipadic).'
             )
+        )
+    parser.add_argument(
+        '--hkust-mtsc', action='store_true', help='Use HKUST/MCTS for Chinese.'
         )
     parser.add_argument(
         '--minus', action='store_true', help='Use opposite value instead of log.'
@@ -582,18 +622,23 @@ class StatData(NamedTuple):
 ALL_LANGS = ['en', 'es', 'zh', 'id', 'ja']
 
 STATS_CORPORA: dict[str, StatData] = {
+    'BNC-Spoken':       StatData(get_bnc_spoken_written_freq_data,{(True,False): 'en'}),
+    'CREA-Spoken':      StatData(get_alonso_freq_data,          {(): 'es'}),
+    'CSJ':              StatData(get_csj_freq_data,             {(): 'ja'}),
+    'HKUST/MTS':        StatData(get_hkust_mtsc_freq_data,      {(): 'zh'}),
+
+    'ACTIV-ES':         StatData(get_activ_es_data,             {(): 'es'}),
+    'EsPal':            StatData(get_espal_freq_data,           {(): 'es'}),
+    'LaboroTV1+2':      StatData(get_laborotv_freq_data,       {(): 'ja'}),
+    'OpenSubtitles':    StatData(get_opensubtitles_freq_data,   ALL_LANGS),
     'SUBTLEX':          StatData(get_sub_freq_data,             ['en', 'es', 'zh']),
     'SUBTLEX-UK':       StatData(get_sub_freq_data,             {('en-uk',): 'en'}),
-    'Wikipedia':        StatData(get_wiki_freq_data,            ALL_LANGS),
-    'OpenSubtitles':    StatData(get_opensubtitles_freq_data,   ALL_LANGS),
-    'CSJ':              StatData(get_csj_freq_data,             {(): 'ja'}),
-    'LaboroTV1+2': StatData(get_laborotv_freq_data,       {(): 'ja'}),
-    'SubIMDB':          StatData(get_subimdb_freq_data,         {(): 'en'}),
-    'Alonso+2011':      StatData(get_alonso_freq_data,          {(): 'es'}),
-    'EsPal':            StatData(get_espal_freq_data,           {(): 'es'}),
+
     'GINI':             StatData(get_gini_data,                 ['en', 'ja']),
-    'ACTIV-ES':         StatData(get_activ_es_data,             {(): 'es'}),
-    'Wikipedia':        StatData(get_tubelex_freq_data,         ALL_LANGS)
+    'Wikipedia':        StatData(get_wiki_freq_data,            ALL_LANGS),
+    'wordfreq':         StatData(wf.get_frequency_dict,         ALL_LANGS),
+
+    'TUBELEX\\textsubscript{default}': StatData(get_tubelex_freq_data, ALL_LANGS)
     }
 
 STATS_DATASETS: dict[str, StatData] = {
@@ -602,7 +647,7 @@ STATS_DATASETS: dict[str, StatData] = {
     'fam':              StatData(get_familiarity_data,          ALL_LANGS),
     'fam-alt':          StatData(get_familiarity_data, {
         ('en', True): 'English (Glasgow)',
-        ('es', False, False, True): 'Spanish (Moreno-Martinez+2014)',
+        ('es', False, False, True): 'Spanish (Moreno-Martínez)',
         })
     }
 
@@ -642,8 +687,10 @@ def do_stats(path_datasets: str, path_corpora: str) -> None:
                         cols
                         ))
                     )
-        # languages as rows:
-        df = df.rename(lambda lang: LANG2FULL_NAME.get(lang, lang)).transpose()
+        # languages as rows->columns, sort alphabetically:
+        df = df.rename(
+            lambda lang: LANG2FULL_NAME.get(lang, lang)
+            ).sort_index().transpose()
 
         # prevent .0 floats
         df.to_csv(path, float_format='%d')
@@ -663,6 +710,8 @@ def main(args: argparse.Namespace) -> None:
     correlation = args.correlation
     read_gold = train or correlation
     subimdb = args.subimdb
+    hkust_mtsc = args.hkust_mtsc
+    spoken_bnc = args.spoken_bnc
     espal = args.espal
     alonso = args.alonso
     csj = args.csj
@@ -751,7 +800,7 @@ def main(args: argparse.Namespace) -> None:
             lang2corpus_specific_tokenizer[lang] = get_kytea_tokenizer(lang)
     for lang in chain(args.wikipedia, subtlex, args.gini):
         # These corpora use simple regex tokenization (except for zh/ja)
-        # OpenSubtitles, SubIMDB use something more advanced (similar to Stanza)
+        # OpenSubtitles, SubIMDB, BNC use something more advanced (similar to Stanza)
         if lang not in ('zh', 'ja'):
             lang2corpus_specific_tokenizer[lang] = get_re_split().split
     if args.activ_es:
@@ -774,15 +823,16 @@ def main(args: argparse.Namespace) -> None:
     if subimdb:
         assert 'en' not in lang2freq_data
         lang2freq_data['en'] = get_subimdb_freq_data()
+    if spoken_bnc:
+        assert 'en' not in lang2freq_data
+        lang2freq_data['en'] = get_bnc_spoken_written_freq_data(spoken=True)
 
     if espal:
         assert 'es' not in lang2freq_data
         lang2freq_data['es'] = get_espal_freq_data()
-
     if alonso:
         assert 'es' not in lang2freq_data
         lang2freq_data['es'] = get_alonso_freq_data()
-
     if args.activ_es:
         assert 'es' not in lang2freq_data
         activ_es_func = get_activ_es_freq_missing_func()
@@ -798,10 +848,15 @@ def main(args: argparse.Namespace) -> None:
             form=args.form, tokenization=args.tokenization, dictionary=args.dictionary
             )
 
+    if hkust_mtsc:
+        assert 'zh' not in lang2freq_data
+        lang2freq_data['zh'] = get_hkust_mtsc_freq_data()
+
     all_langs = set(chain(
         subtlex, args.opensubtitles, args.tubelex,
         args.wikipedia, args.gini, args.wordfreq,
-        ['en'] if subimdb else [],
+        ['en'] if (subimdb or spoken_bnc) else [],
+        ['zh'] if (hkust_mtsc) else [],
         ['es'] if (espal or alonso or (activ_es_func is not None)) else [],
         ['ja'] if (csj or laborotvspeech) else [],
         ))
@@ -880,7 +935,8 @@ def main(args: argparse.Namespace) -> None:
 
     if correlation:
         print(
-            'file\tlanguage\tcorrelation\tcorr_tubelex\tn\tn_missing'
+            'file\tlanguage\tcorrelation\tcorr_tubelex\t'
+            'n\tn_missing\tcorr_without_missing'
             )
     elif not train and args.metrics:
         print('file\tlanguage\tPearson\'s r\tMAE\tMSE\tR2')
@@ -969,6 +1025,7 @@ def main(args: argparse.Namespace) -> None:
                     )
             assert all(frequencies)  # all should be non-zero
             f = np.array(frequencies)
+            f_valid = ~np.array(missing, dtype=bool)
             logf = (
                 (-f) if args.minus else
                 (-np.log10(f)) if args.minus_log else
@@ -1013,9 +1070,10 @@ def main(args: argparse.Namespace) -> None:
                 r_tubelex = pearson_r(logf, logf_tubelex)
                 n = len(logf)
                 n_missing = sum(missing)
+                r_valid = pearson_r(logf[f_valid], c[f_valid])
                 print(
-                    f'{input_id}\t{LANG2FULL_NAME[lang]}\t{r:.4f}\t{r_tubelex:.4f}\t'
-                    f'{n}\t{n_missing}'
+                    f'{input_id}\t{LANG2FULL_NAME[lang]}\t{r}\t{r_tubelex}\t'
+                    f'{n}\t{n_missing}\t{r_valid}'
                     )
                 for fields, p in zip(data, logf):
                     print('\t'.join((
@@ -1043,8 +1101,8 @@ def main(args: argparse.Namespace) -> None:
                     mse = mse_score(c, pred)
                     r2 = r2_score(c, pred)
                     print(
-                        f'{input_id}\t{LANG2FULL_NAME[lang]}\t{r:.4f}\t{mae:.4f}\t'
-                        f'{mse:.4f}\t{r2:.4f}'
+                        f'{input_id}\t{LANG2FULL_NAME[lang]}\t{r}\t{mae}\t'
+                        f'{mse}\t{r2}'
                         )
                 for fields, p in zip(data, pred):
                     print('\t'.join((

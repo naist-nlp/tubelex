@@ -1,2 +1,2 @@
-file	language	correlation	corr_tubelex	n	n_missing
-ja	Japanese	0.2498	0.9561	27935	162
+file	language	correlation	corr_tubelex	n	n_missing	corr_without_missing
+ja	Japanese	0.2498	0.9561	27935	162	0.24842861717504033

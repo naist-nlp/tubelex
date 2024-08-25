@@ -6,6 +6,7 @@ from pandas.io.formats.style_render import Subset
 
 RESULT_PREC = 3
 RESULT_TOL = 0.00001  # We use 4 decimal places in the original data
+STAT_PREC = 0
 
 VALID_CORPORA = {
     'Wikipedia': 'wiki',
@@ -13,13 +14,15 @@ VALID_CORPORA = {
     'SUBTLEX': 'subtlex',
     'SUBTLEX-UK': 'subtlex-uk',
     'SubIMDB': 'subimdb',
+    'BNC-Spoken': 'spoken-bnc',
+    'HKUST/MTS': 'hkust-mtsc',
     'OpenSubtitles': 'os',
     'GINI': 'gini',
     'CSJ': 'csj-lemma',
     'LaboroTV1+2': 'laborotv',
     'ACTIV-ES': 'activ-es',
     'EsPal': 'espal',
-    'Alonso+2011': 'alonso',
+    'CREA-Spoken': 'alonso',
     'TUBELEX\\textsubscript{default}': 'tubelex',
     'TUBELEX\\textsubscript{regex}': 'tubelex-regex',
     'TUBELEX\\textsubscript{base}': 'tubelex-base',
@@ -154,42 +157,87 @@ def limit_to_valid_corpora(df: pd.DataFrame) -> pd.DataFrame:
     valid = [c in VALID_CORPORA for c in df.index]
     return df.loc[valid]
 
+
+def alternate_row_bg(df: pd.DataFrame|pd.Series):
+    s = np.arange(len(df)) % 2 != 0
+    if isinstance(df, pd.Series):
+        return np.where(s, 'cellcolor[HTML]:{EEEEEE}', '')
+    s = pd.concat([pd.Series(s)] * df.shape[1], axis=1)
+    z = pd.DataFrame(np.where(s, 'cellcolor[HTML]:{EEEEEE}', ''),
+                 index=df.index, columns=df.columns)
+    return z
+
+
 def main():
-    for results_id, best in (
-        ('mlsp', 'min'),
-        ('ldt', 'min'),
-        ('fam', 'max'),
-        ('fam-alt', 'max')
-        ):
-        r = limit_to_valid_corpora(pd.read_table(
-            f'experiments/{results_id}-corr-aggregate-correlation.tsv',
-            index_col=0
-            ))
-        p = limit_to_valid_corpora(pd.read_table(
-            f'experiments/{results_id}-corr-aggregate-pvalues.tsv',
-            index_col=0
-            ))
+#     for results_id, best, header_levels in (
+#         ('mlsp', 'min', 1),
+#         ('ldt', 'min', 1),
+#         ('fam', 'max', 1),
+#         ('fam-alt', 'max', 2),
+#         ):
+#         tsv_header = list(range(header_levels))
+#         r = limit_to_valid_corpora(pd.read_table(
+#             f'experiments/{results_id}-corr-aggregate-correlation.tsv',
+#             index_col=0, header=tsv_header
+#             ))
+#         p = limit_to_valid_corpora(pd.read_table(
+#             f'experiments/{results_id}-corr-aggregate-pvalues.tsv',
+#             index_col=0, header=tsv_header
+#             ))
+#
+#         s = Styler(r, precision=RESULT_PREC, na_rep='---')
+#
+#         r_not_na = ~r.isna()
+#         s = background_gradient(
+#             s,
+#             cmap='Blues', bool_subset=r_not_na,
+#             gmap=(-r if (best == 'min') else r),
+#             )
+#         s = add_p_stars(s, p)           # TODO: add pad if we add a mean column?
+#         s = highlight_extreme(s, props='textbf:--latex--rwrap;', op=best)  # Inside p_stars
+#         col_fmt = 'l' * s.data.index.nlevels + ('c') * len(s.data.columns)
+#         tex = s.to_latex(
+#             hrules=True,
+#             column_format=col_fmt,
+#             convert_css=True # for background_gradient
+#             )
+#         latex_id = results_id.replace('-', '_')
+#         with open(f'experiments/tables/{latex_id}_corr.tex', 'w') as fo:
+#             fo.write(tex)
 
+        for stats_id, index_levels in (
+            ('stats-corpora', 2),
+            ('stats-datasets', 1),
+            ):
+            csv_index = list(range(index_levels))
+            stats = pd.read_csv(
+                f'experiments/{stats_id}.csv',
+                index_col=csv_index
+                ) # TODO doesn't need limit_to_valid_corpora
 
-        s = Styler(r, precision=RESULT_PREC, na_rep='---')
+            if stats_id == 'stats-datasets':
+                lang_note = pd.Series(stats.columns).str.partition(' ')
+                stats.columns = pd.MultiIndex.from_arrays(
+                    [lang_note[0], lang_note[2]], names=None
+                    )
 
-        r_not_na = ~r.isna()
-        s = background_gradient(
-            s,
-            cmap='Blues', bool_subset=r_not_na,
-            gmap=(-r if (best == 'min') else r),
-            )
-        s = add_p_stars(s, p)           # TODO: add pad if we add a mean column?
-        s = highlight_extreme(s, props='textbf:--latex--rwrap;', op=best)  # Inside p_stars
-        col_fmt = 'l' * s.data.index.nlevels + ('c') * len(s.data.columns)
-        tex = s.to_latex(
-            hrules=True,
-            column_format=col_fmt,
-            convert_css=True # for background_gradient
-            )
-        latex_id = results_id.replace('-', '_')
-        with open(f'experiments/tables/{latex_id}_corr.tex', 'w') as fo:
-            fo.write(tex)
+            s = Styler(stats, precision=STAT_PREC, thousands=',', na_rep='---')
+
+            if stats_id == 'stats-corpora':
+                s = s.apply(alternate_row_bg, axis=None)
+                s = s.apply_index(alternate_row_bg, level=index_levels-1)
+            # TODO? use siunitx to add thousands separators
+            col_fmt = 'l' * s.data.index.nlevels + ('r') * len(s.data.columns)
+            tex = s.to_latex(
+                hrules=True,
+                column_format=col_fmt,
+                sparse_columns=False,   # repeat language names for datasets
+                #convert_css=True # for background_gradient
+                )
+            latex_id = stats_id.replace('-', '_')
+            with open(f'experiments/tables/{latex_id}.tex', 'w') as fo:
+                fo.write(tex)
+
 
 
 if __name__ == '__main__':

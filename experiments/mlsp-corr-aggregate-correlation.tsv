@@ -1,20 +1,21 @@
 	English	Japanese	Spanish
-wordfreq	-0.7472	-0.5979	-0.5513
-Wikipedia	-0.6509	-0.487	-0.4541
-Wikipedia_R	-0.6509		-0.4541
+BNC-Spoken	-0.6953631634193883		
+CREA-Spoken			-0.5078
+CSJ		-0.5278	
+ACTIV-ES			-0.5161
+EsPal			-0.6268
+LaboroTV1+2		-0.6096	
+OpenSubtitles	-0.7208	-0.1914	-0.628
+SubIMDB	-0.7174		
+SubIMDB_R	-0.7174		
 SUBTLEX	-0.6962		-0.6182
 SUBTLEX-UK	-0.7235		
 SUBTLEX_R	-0.6962		-0.6182
-SubIMDB	-0.7174		
-SubIMDB_R	-0.7174		
-OpenSubtitles	-0.7208	-0.1914	-0.628
 GINI	-0.3485	-0.3786	
 GINI_R	-0.3485		
-CSJ		-0.5278	
-LaboroTV1+2		-0.6096	
-ACTIV-ES			-0.5161
-Alonso+2011			-0.5078
-EsPal			-0.6268
+Wikipedia	-0.6509	-0.487	-0.4541
+Wikipedia_R	-0.6509		-0.4541
+wordfreq	-0.7472	-0.5979	-0.5513
 TUBELEX\textsubscript{default}	-0.7624	-0.6613	-0.6032
 TUBELEX\textsubscript{regex}	-0.7613		-0.5877
 TUBELEX\textsubscript{base}		-0.6577	

@@ -32,3 +32,8 @@ sbatch make-tokenize-ja.sh
 # https://laboro.ai/activity/column/engineer/laborotvspeech2/
 #
 # python tubelex.py --lang en --frequencies --laborotv --tokenized-files laborotvspeech -o data/laborotvspeech.tsv
+#
+# Build data/hkust_mtsc.tsv using files extracted from
+# https://catalog.ldc.upenn.edu/LDC2005T32
+#
+# python tubelex.py --lang zh --frequencies --hkust-mtsc --tokenized-files LDC2005T32/hkust_mtsc_p1tr/data -o data/hkust-mtsc.tsv

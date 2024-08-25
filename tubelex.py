@@ -26,6 +26,7 @@ from lang_utils import (
     )
 from freq_utils import Storage, WordCounterGroup
 from vtt import VTTCleaner, sub_space
+import hkust_mtsc
 from unicodedata import normalize as unicode_normalize
 import pysbd
 
@@ -237,13 +238,6 @@ def add_tokenizer_arg_group(
                 )
             )
     group.add_argument(
-        '--tokenized-files', type=str, default=None,
-        help=(
-            'Compute frequencies from tokenized files in a specified directory'
-            '(e.g. SubIMDB; see README; requires --frequencies and --output).'
-            )
-        )
-    group.add_argument(
         '--pos', '-P', action='store_true',
         help='Add most common POS to frequencies'
         )
@@ -311,12 +305,24 @@ def parse() -> argparse.Namespace:
     add_tokenizer_arg_group(parser, unique_tokenization=True)
 
     parser.add_argument(
+        '--tokenized-files', type=str, default=None,
+        help=(
+            'Compute frequencies from tokenized files in a specified directory'
+            '(e.g. SubIMDB; see README; requires --frequencies and --output).'
+            )
+        )
+    parser.add_argument(
         '--laborotvspeech', action='store_true',
         help=(
             'Tokenized files are LaboroTVSpeech (see README).'
             )
         )
-
+    parser.add_argument(
+        '--hkust-mtsc', action='store_true',
+        help=(
+            'Tokenized files are HKUST-MCTS (see README).'
+            )
+        )
     parser.add_argument(
         '--no-filter-cc-descriptions', action='store_false',
         dest='filter_cc_descriptions', help=(
@@ -695,10 +701,14 @@ def filter_dir_files(
         )
 
 
+DEFAULT_ENCODING = 'utf-8'
+
+
 @contextmanager
 def get_files_contents(
     path: str, storage: Storage, any_suffix: bool = False,
-    filenames: Optional[Iterable[str]] = None
+    filenames: Optional[Iterable[str]] = None,
+    encoding: str = DEFAULT_ENCODING
     ):
     zf = None
     try:
@@ -711,14 +721,14 @@ def get_files_contents(
 
             def iter_contents(max_files=None):
                 for file in files[:max_files]:
-                    yield zf.read(file).decode('utf-8')
+                    yield zf.read(file).decode(encoding)
 
         elif filenames:
             files = filenames
 
             def iter_contents(max_files=None):
                 for file in files[:max_files]:
-                    with open(os.path.join(path, file)) as f:
+                    with open(os.path.join(path, file), encoding=encoding) as f:
                         yield f.read()
         else:
             dfs = list(dir_files(
@@ -729,8 +739,11 @@ def get_files_contents(
 
             def iter_contents(max_files=None):
                 for directory, file in dfs[:max_files]:
-                    with open(os.path.join(directory, file)) as f:
-                        yield f.read()
+                    with open(os.path.join(directory, file), encoding=encoding) as f:
+                        try:
+                            yield f.read()
+                        except Exception:
+                            raise Exception(f'{f.name}')
 
         yield (files, iter_contents)
     finally:
@@ -1032,7 +1045,8 @@ def do_frequencies(
     min_videos: int,
     min_channels: int,
     verbose: bool,
-    laborotv: bool = False
+    laborotv: bool = False,
+    hkust: bool = False
     ) -> None:
 
     assert (tokenize is not None) != (pos_tag is not None), (tokenize, pos_tag)
@@ -1083,8 +1097,9 @@ def do_frequencies(
     with get_files_contents(
         tokenized_files or (UNIQUE_PATH_FMT % identifier),
         storage,
-        any_suffix=(tokenized_files is not None),
-        filenames=(LABOROTV_FILES if laborotv else None)
+        any_suffix=(tokenized_files is not None and not hkust),
+        filenames=(LABOROTV_FILES if laborotv else None),
+        encoding=(hkust_mtsc.ENCODING if hkust else DEFAULT_ENCODING)
         ) as files_contents:
         files, iter_contents = files_contents
         n_videos = len(files[:limit])
@@ -1135,6 +1150,8 @@ def do_frequencies(
                 if video_no%2:
                     counters.close_doc()
                 continue  # Bypass the usual tokenization process
+            elif hkust:
+                text = hkust_mtsc.process(text)
 
             if tokenize is not None:
                 words = tokenize(text)
@@ -1319,7 +1336,8 @@ def get_stanza_tokenizers(
 
 
 def get_tokenizers(
-    lang: str, tokenization: Optional[str], full: bool, args: argparse.Namespace
+    lang: Optional[str], tokenization: Optional[str], full: bool,
+    args: argparse.Namespace
     ) -> tuple[Tokenizer, Optional[TokenizerTagger], Optional[TokenizerTagger]]:
     '''
     If `tokenization` is None, it's interpreted as 'stanza' for non-CJ languages.
@@ -1340,7 +1358,6 @@ def get_tokenizers(
     Likewise whether (2) and (3) filter non-words is determined by args.filter_tokens.
 
     Argument names from `args` used:
-- tokenized_files
     - pos
     - form
     - extended_pos
@@ -1354,7 +1371,7 @@ def get_tokenizers(
     tokenize: Optional[Tokenizer] = None
     pos_tag: Optional[TokenizerTagger] = None
 
-    if args.tokenized_files:
+    if lang == None:                # for already tokenized files
         def surface_tokenize(s):
             return s.split()
 
@@ -1538,9 +1555,14 @@ def main() -> None:
             raise Exception(
                 '--limit--categories cannot be applied with --tokenized-files.'
                 )
-    if args.laborotv and not tokenized_files:
-        raise Exception('--laborotv cannot be applied without --tokenized-files.')
-
+    if (args.laborotvspeech or args.hkust_mtsc) and not tokenized_files:
+        raise Exception(
+            '--laborotvspeech/--hkust-mtsc cannot be applied without --tokenized-files.'
+            )
+    if args.laborotvspeech and args.hkust_mtsc:
+        raise Exception(
+            '--laborotvspeech and --hkust-mtsc cannot be used together.'
+            )
     # sublist: for file filtering (clean), and channel ids (frequencies)
 
     if (clean or frequencies) and not tokenized_files:
@@ -1590,13 +1612,14 @@ def main() -> None:
                 'treebank' if lang == 'en' else
                 'regex'
                 )
+        t_lang = None if (tokenized_files and not args.hkust_mtsc) else lang
         surface_tokenize, tokenize, pos_tag = get_tokenizers(
-            lang=lang, tokenization=tokenization, full=(frequencies or args.tokenize),
+            lang=t_lang, tokenization=tokenization, full=(frequencies or args.tokenize),
             args=args
             )
         if unique_tokenization != tokenization:
             surface_tokenize, _, _ = get_tokenizers(
-                lang=lang, tokenization=unique_tokenization, full=False, args=args
+                lang=t_lang, tokenization=unique_tokenization, full=False, args=args
                 )
 
         if unique:
@@ -1617,7 +1640,8 @@ def main() -> None:
                 storage,
                 sublist,
                 tokenized_files=tokenized_files,
-                laborotv=args.laborotv,
+                laborotv=args.laborotvspeech,
+                hkust=args.hkust_mtsc,
                 tokenize=tokenize,
                 categories=categories,
                 pos_tag=pos_tag,

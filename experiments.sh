@@ -125,6 +125,11 @@ python experiments/run.py --subimdb --train   --mlsp english_lcp_labels
 python experiments/run.py --subimdb --metrics --mlsp english_lcp_labels   > experiments/mlsp-results-subimdb.tsv
 python experiments/run.py --subimdb --corr    --mlsp english_lcp_labels   > experiments/mlsp-corr-subimdb.tsv
 
+echo spoken-bnc
+python experiments/run.py --spoken-bnc --train   --mlsp english_lcp_labels
+python experiments/run.py --spoken-bnc --metrics --mlsp english_lcp_labels   > experiments/mlsp-results-spoken-bnc.tsv
+python experiments/run.py --spoken-bnc --corr    --mlsp english_lcp_labels   > experiments/mlsp-corr-spoken-bnc.tsv
+
 
 echo
 echo '==='
@@ -156,6 +161,8 @@ echo "gini"
 python experiments/run.py --minus --gini en                              --corr --ldt en       > experiments/ldt-corr-gini.tsv
 echo "subimdb"
 python experiments/run.py --subimdb 				                     --corr --ldt en       > experiments/ldt-corr-subimdb.tsv
+echo "spoken-bnc"
+python experiments/run.py --spoken-bnc 				                     --corr --ldt en       > experiments/ldt-corr-spoken-bnc.tsv
 echo "espal"
 python experiments/run.py --espal 										 --corr --ldt es	   > experiments/ldt-corr-espal.tsv
 echo "alonso"
@@ -164,6 +171,8 @@ echo "activ-es"
 python experiments/run.py --activ-es 									 --corr --ldt es 	   > experiments/ldt-corr-activ-es.tsv
 echo "subtlex-uk"
 python experiments/run.py --subtlex-uk                   --corr --ldt en > experiments/ldt-corr-subtlex-uk.tsv
+echo "hkust-mtsc"
+python experiments/run.py --hkust-mtsc                   --corr --ldt zh > experiments/ldt-corr-hkust-mtsc.tsv
 
 
 # We don't have z-scores ready for Spanish, and means are good enough to compare various corpora, although noisier:
@@ -225,6 +234,10 @@ echo gini
 python experiments/run.py --minus --gini en ja 							  --corr --fam en ja  	> experiments/fam-corr-gini.tsv
 echo subimdb
 python experiments/run.py --subimdb 									  --corr  --fam en   	> experiments/fam-corr-subimdb.tsv
+echo spoken-bnc
+python experiments/run.py --spoken-bnc 									  --corr  --fam en   	> experiments/fam-corr-spoken-bnc.tsv
+echo hkust-mtsc
+python experiments/run.py --hkust-mtsc 									  --corr  --fam zh   	> experiments/fam-corr-hkust-mtsc.tsv
 echo laborotv
 python experiments/run.py -D ipadic --laborotv 						      --corr --fam ja 		> experiments/fam-corr-laborotv.tsv
 
@@ -269,6 +282,10 @@ echo activ-es
 python experiments/run.py $alt_opt --activ-es 								      --corr --fam es  		> experiments/fam-alt-corr-activ-es.tsv
 echo gini
 python experiments/run.py $alt_opt --minus --gini en 							  --corr --fam en  	    > experiments/fam-alt-corr-gini.tsv
+echo subimdb
+python experiments/run.py $alt_opt --subimdb 									  --corr  --fam en   	> experiments/fam-alt-corr-subimdb.tsv
+echo spoken-bnc
+python experiments/run.py $alt_opt --spoken-bnc 									  --corr  --fam en   	> experiments/fam-alt-corr-spoken-bnc.tsv
 
 # Optionally clean up:
 # rm -r experiments/models experiments/output experiments/output.tsv experiments/cache

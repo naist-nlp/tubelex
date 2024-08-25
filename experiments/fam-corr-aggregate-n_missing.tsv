@@ -1,17 +1,19 @@
 	Chinese	English	Indonesian	Japanese	Spanish
-wordfreq	3.0	21.0	100.0	489.0	0.0
-Wikipedia	347.0	4.0	12.0	441.0	0.0
-Wikipedia_R			12.0		
+BNC-Spoken		405.0			
+CREA-Spoken					60.0
+CSJ				5327.0	
+HKUST/MTS	13028.0				
+ACTIV-ES					71.0
+EsPal					34.0
+LaboroTV1+2				750.0	
+OpenSubtitles	196.0	14.0	7.0	12809.0	0.0
+SubIMDB		36.0			
 SUBTLEX	2024.0	89.0			20.0
 SUBTLEX-UK		69.0			
-SubIMDB		36.0			
-OpenSubtitles	196.0	14.0	7.0	12809.0	0.0
 GINI		298.0		1739.0	
-CSJ				5327.0	
-LaboroTV1+2				750.0	
-ACTIV-ES					71.0
-Alonso+2011					60.0
-EsPal					34.0
+Wikipedia	347.0	4.0	12.0	441.0	0.0
+Wikipedia_R			12.0		
+wordfreq	3.0	21.0	100.0	489.0	0.0
 TUBELEX\textsubscript{default}	635.0	37.0	10.0	286.0	0.0
 TUBELEX\textsubscript{regex}		35.0	10.0		0.0
 TUBELEX\textsubscript{base}				162.0	

@@ -170,6 +170,10 @@ To replicate our experiments you will need the following files placed in the dat
 
     ```python tubelex.py --lang en --frequencies --laborotv --tokenized-files laborotvspeech -o data/laborotvspeech.tsv```
 
+- `hkust-mtcs.tsv` file, which you can generate by first downloading and extracting [transcripts of the HKUST/MTSC corpus](https://catalog.ldc.upenn.edu/LDC2005T32), into the `LDC2005T32` directory, and then compiling the frequency list with the following command:
+
+	```python tubelex.py --lang zh --frequencies --hkust-mtsc --tokenized-files LDC2005T32/hkust_mcts_p1tr/data -o data/hkust-mtsc.tsv```
+
 - `espal.tsv` file created by following these steps:
 	1. Go to the [EsPal website](https://www.bcbl.eu/databases/espal/).
 	2. Select "Subtitle Tokens (2012-10-05)". (Phonology doesn't matter.)
