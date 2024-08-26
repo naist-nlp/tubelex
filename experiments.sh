@@ -243,12 +243,13 @@ python experiments/run.py -D ipadic --laborotv 						      --corr --fam ja 		> e
 
 
 
+
 echo
 echo '=============================='
 echo 'Familiarity (Alternative Data)'
 echo '=============================='
 echo
-alt_opt='--glasgow --moreno-martinez'
+alt_opt='--glasgow --moreno-martinez --amano'
 for corpus in tubelex tubelex-entertainment tubelex-comedy wordfreq wiki os
 do
 	cache_opt=''
@@ -263,17 +264,20 @@ do
 		fi
 	fi
 	echo "$corpus"
-	python experiments/run.py $cache_opt $corpus_opt     en es           --corr --fam en es > experiments/fam-alt-corr-${corpus}.tsv
+	python experiments/run.py $cache_opt $corpus_opt     en es ja           --corr --fam en es > experiments/fam-alt-corr-${corpus}.tsv
 	if [[ "$corpus" =~ ^tubelex ]]
 	then
-		python experiments/run.py $corpus_opt en es --form lemma         --corr --fam en es  > experiments/fam-alt-corr-${corpus}-lemma.tsv
+		python experiments/run.py $corpus_opt en es ja --form lemma         --corr --fam en es  > experiments/fam-alt-corr-${corpus}-lemma.tsv
+		python experiments/run.py $corpus_opt    ja       --form base 		   --corr --fam    ja        > experiments/fam-alt-corr-${corpus}-base.tsv
 		python experiments/run.py $corpus_opt en es --tokenization regex --corr --fam en es  > experiments/fam-alt-corr-${corpus}-regex.tsv
 	fi
 done
+echo csj-lemma
+python experiments/run.py $alt_opt --form lemma --csj 						      --corr --fam ja 		> experiments/fam-alt-corr-csj-lemma.tsv
 echo subtlex-uk
 python experiments/run.py $alt_opt --subtlex-uk --corr --fam en > experiments/fam-alt-corr-subtlex-uk.tsv
 echo subtlex
-python experiments/run.py $alt_opt --subtlex en es    						      --corr --fam en es   > experiments/fam-alt-corr-subtlex.tsv
+python experiments/run.py $alt_opt --subtlex en es    						      --corr --fam en es    > experiments/fam-alt-corr-subtlex.tsv
 echo espal
 python experiments/run.py $alt_opt --espal 										  --corr --fam es 		> experiments/fam-alt-corr-espal.tsv
 echo alonso
@@ -281,11 +285,13 @@ python experiments/run.py $alt_opt --alonso 									  --corr --fam es 		> exper
 echo activ-es
 python experiments/run.py $alt_opt --activ-es 								      --corr --fam es  		> experiments/fam-alt-corr-activ-es.tsv
 echo gini
-python experiments/run.py $alt_opt --minus --gini en 							  --corr --fam en  	    > experiments/fam-alt-corr-gini.tsv
+python experiments/run.py $alt_opt --minus --gini en ja 					      --corr --fam en ja    > experiments/fam-alt-corr-gini.tsv
 echo subimdb
-python experiments/run.py $alt_opt --subimdb 									  --corr  --fam en   	> experiments/fam-alt-corr-subimdb.tsv
+python experiments/run.py $alt_opt --subimdb 									  --corr  --fam en   	> experiments/fam-corr-subimdb.tsv
 echo spoken-bnc
-python experiments/run.py $alt_opt --spoken-bnc 									  --corr  --fam en   	> experiments/fam-alt-corr-spoken-bnc.tsv
+python experiments/run.py $alt_opt --spoken-bnc 								  --corr  --fam en   	> experiments/fam-corr-spoken-bnc.tsv
+echo laborotv
+python experiments/run.py $alt_opt -D ipadic --laborotv 						  --corr --fam ja 		> experiments/fam-alt-corr-laborotv.tsv
 
 # Optionally clean up:
 # rm -r experiments/models experiments/output experiments/output.tsv experiments/cache

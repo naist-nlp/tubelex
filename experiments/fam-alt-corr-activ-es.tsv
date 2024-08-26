@@ -1,2 +1,2 @@
-file	language	correlation	corr_tubelex	n	n_missing
-es	Spanish	0.4955	0.7915	820	164
+file	language	correlation	corr_tubelex	n	n_missing	corr_without_missing
+es	Spanish	0.49546132712233604	0.791501473791753	820	164	0.40270566018952275

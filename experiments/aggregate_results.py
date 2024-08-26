@@ -72,7 +72,8 @@ def dependent_corr_pvalue_or_nan(
 
 LANG2ALT_DESC = {
     'English': '(Glasgow)',
-    'Spanish': '(Moreno-Martínez)'
+    'Spanish': '(Moreno-Martínez)',
+    'Japanese': '(Amano+Kondo)'
     }
 
 def main():

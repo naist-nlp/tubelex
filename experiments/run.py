@@ -174,7 +174,8 @@ def get_familiarity_data(
     language: str,
     glasgow: bool = False,
     clark_paivio: bool = False,
-    moreno_martinez: bool = False
+    moreno_martinez: bool = False,
+    amano: bool = False
     # IMPORTANT: STATS_DATASETS depends on the number/order of arguments!
     ) -> pd.Series:
     if language == 'zh':
@@ -228,17 +229,27 @@ def get_familiarity_data(
             df['Word'] = df['Word'].str.strip()   # strip spaces
             series = df.set_index('Word')[fam_col]
     elif language == 'ja':
-        df = pd.read_csv('data/Lexeed.txt',
-                         header=None, names=range(1, 37),  # Readme_Lexeed.txt numbering
-                         encoding='sjis'
-                         )
-        # Take only the first orthography from "32:語義別表記", e.g.
-        # 会う/遇う/逢う, ガキ・餓鬼, or いましめる・戒める/警める
-        df['word'] = df[32].str.partition('・')[0].str.partition('/')[0]
-        df.set_index('word', inplace=True, drop=False)
-        # Mean familiarity is recorded separately for each word sense
-        # in "35:語義別単語親密度の平均値", we take the most familiar sense's value:
-        series = df.groupby(level=0)[35].max()
+        if amano:
+            fam_col = '文字単語親密度'
+            df = pd.read_csv('data/amano-kondo-1999-ntt/単語親密度.csv')
+            # Remove -1 values (N/A): 88569 -> 88494 entries:
+            df = df.loc[df[fam_col]>=0]
+            # We only take 文字単語親密度 (not e.g. 文字音声単語親密度, 音声単語親密度)
+            # Entries only differing in written form (表記), if there are multiple
+            # values, take mean (-> 76883 entries).
+            series = df.set_index('表記').groupby(level=0)[fam_col].mean()
+        else:
+            # Larger and more recent WLSP:
+            fam_col = '知っている'
+            download_if_necessary(
+                'https://github.com/masayu-a/WLSP-familiarity/raw/4.0/bunruidb-fam.csv',
+                'data/downloads/bunruidb-fam.csv'
+                )
+            df = pd.read_csv('data/downloads/bunruidb-fam.csv')
+            df = df[~df[fam_col].isna()]                # remove N/A values
+            # Entries only differing in written form (見出し本体), if there are multiple
+            # values, take mean (-> 81271 entries).
+            series = df.set_index('見出し本体').groupby(level=0)[fam_col].mean()
     else:
         raise Exception(f'No familiarity data for {language}')
 
@@ -471,6 +482,10 @@ def parse_args() -> argparse.Namespace:
         help='Use Moreno-Martinez+2014 for Spanish familiarity.'
         )
     parser.add_argument(
+        '--amano', action='store_true',
+        help='Use the Heisei NTT DB (Amano and Kondo, 1999) for Japanese familiarity.'
+        )
+    parser.add_argument(
         '--zscore', '-z', action='store_true',
         help='Prefer z-score for LDT (applies to en, zh).'
         )
@@ -642,13 +657,20 @@ STATS_CORPORA: dict[str, StatData] = {
     }
 
 STATS_DATASETS: dict[str, StatData] = {
-    'ldt':              StatData(get_ldt_data,                  ['en', 'es', 'zh']),
-    'mlsp':             StatData(get_mlsp_dataset,              ['en', 'es', 'ja']),
-    'fam':              StatData(get_familiarity_data,          ALL_LANGS),
-    'fam-alt':          StatData(get_familiarity_data, {
-        ('en', True): 'English (Glasgow)',
-        ('es', False, False, True): 'Spanish (Moreno-Martínez)',
+    'Lexical Decision Time': StatData(get_ldt_data,                  ['en', 'es', 'zh']),
+    'Lexical Complexity':             StatData(get_mlsp_dataset,              ['en', 'es', 'ja']),
+    'Word Familiarity':              StatData(get_familiarity_data,          ALL_LANGS),
+    'Word Familiarity (Alternative)':          StatData(get_familiarity_data, {
+        ('en', True): 'en',
+        ('es', False, False, True): 'es',
+        ('ja', False, False, False, True): 'ja',
         })
+#     'Word Familiarity':          StatData(get_familiarity_data, {
+#         **{(lang,): lang  for lang in ALL_LANGS},
+#         ('en', True): 'English (Glasgow)',
+#         ('es', False, False, True): 'Spanish (Moreno-Martínez)',
+#         ('ja', False, False, False, True): 'Japanese (Amano+Kondo)',
+#         })
     }
 
 
@@ -991,7 +1013,8 @@ def main(args: argparse.Namespace) -> None:
                     lang,
                     glasgow=args.glasgow,
                     clark_paivio=args.clark_paivio,
-                    moreno_martinez=args.moreno_martinez
+                    moreno_martinez=args.moreno_martinez,
+                    amano=args.amano
                     )
                 )
             (
@@ -1050,6 +1073,8 @@ def main(args: argparse.Namespace) -> None:
                         cache_name += '.clark_paivio'
                     if args.moreno_martinez:
                         cache_name += '.moreno_martinez'
+                    if args.amano:
+                        cache_name += '.amano'
                 cache_path = os.path.join(tubelex_cache_dir, cache_name + '.npy')
 
                 if cache_tubelex:
@@ -1058,13 +1083,21 @@ def main(args: argparse.Namespace) -> None:
                 else:
                     if not os.path.exists(cache_path):
                         print(
-                            f'Warning: No cached TUBELEX frequencies at {cache_path}.'
+                            f'Warning: No cached TUBELEX frequencies at {cache_path}. '
                             f'Will use NA values to compare with instead.',
                             file=sys.stderr
                             )
                         logf_tubelex = np.full_like(logf, np.nan)
                     else:
                         logf_tubelex = np.load(cache_path, allow_pickle=False)
+                        if len(logf_tubelex) != len(logf):
+                            print(
+                                f'Warning: Cached TUBELEX frequencies at {cache_path} '
+                                f'differ in length {len(logf_tubelex)} != {len(logf)}. '
+                                f'Will use NA values to compare with instead.',
+                                file=sys.stderr
+                                )
+                            logf_tubelex = np.full_like(logf, np.nan)
 
                 r = pearson_r(logf, c)
                 r_tubelex = pearson_r(logf, logf_tubelex)
