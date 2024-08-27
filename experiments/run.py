@@ -29,8 +29,6 @@ from tubelex import add_tokenizer_arg_group, get_tokenizers, nfkc_lower
 from lang_utils import get_re_split
 
 
-FREQ_EPS = 1e-9
-
 LANG2FULL_NAME: dict[str, str] = {
     'en': 'English',
     'ca': 'Catalan',
@@ -233,7 +231,7 @@ def get_familiarity_data(
             fam_col = '文字単語親密度'
             df = pd.read_csv('data/amano-kondo-1999-ntt/単語親密度.csv')
             # Remove -1 values (N/A): 88569 -> 88494 entries:
-            df = df.loc[df[fam_col]>=0]
+            df = df.loc[df[fam_col] >= 0]
             # We only take 文字単語親密度 (not e.g. 文字音声単語親密度, 音声単語親密度)
             # Entries only differing in written form (表記), if there are multiple
             # values, take mean (-> 76883 entries).
@@ -359,8 +357,8 @@ def get_bnc_spoken_written_freq_data(
         fd  = FrequencyData.from_file_url(
             url='https://www.kilgarriff.co.uk/BNClists/all.num.gz',
             filename='data/downloads/bnc_all.num.gz',
-            header=['freq','word','pos','cd'], cols=['word','freq','cd'], delimiter=' ',
-            total_row='!!WHOLE_CORPUS'
+            header=['freq', 'word', 'pos', 'cd'], cols=['word', 'freq', 'cd'],
+            delimiter=' ', total_row='!!WHOLE_CORPUS'
             )
         if written:
             return fd
@@ -370,8 +368,8 @@ def get_bnc_spoken_written_freq_data(
     fdw = FrequencyData.from_file_url(
         url='https://www.kilgarriff.co.uk/BNClists/written.num.gz',
         filename='data/downloads/bnc_written.num.gz',
-        header=['freq','word','pos','cd'], cols=['word','freq','cd'], delimiter=' ',
-        total_row='!!ANY'
+        header=['freq', 'word', 'pos', 'cd'], cols=['word', 'freq', 'cd'],
+        delimiter=' ', total_row='!!ANY'
         )
     if written:
         return fdw
@@ -395,6 +393,16 @@ def get_alonso_freq_data() -> FrequencyData:
         cols=['Word', 'Frequency'],
         total_row=False
         )
+
+
+wf_min_freq = {}
+
+
+def get_wf_min_freq(lang: str) -> float:
+    if (f := wf_min_freq.get(lang)) is None:
+        f = min(wf.get_frequency_dict(lang).values())
+        wf_min_freq[lang] = f
+    return f
 
 
 LANG2KYTEA_MODEL = {
@@ -438,7 +446,6 @@ def parse_args() -> argparse.Namespace:
                         help='Train linear regression.')
     action.add_argument('--correlation', action='store_true',
                         help='Compute correlation.')
-
 
     parser.add_argument('--stats-datasets', default='experiments/stats-datasets.csv',
                         help='Output CSV file for dataset stats.')
@@ -637,7 +644,8 @@ class StatData(NamedTuple):
 ALL_LANGS = ['en', 'es', 'zh', 'id', 'ja']
 
 STATS_CORPORA: dict[str, StatData] = {
-    'BNC-Spoken':       StatData(get_bnc_spoken_written_freq_data,{(True,False): 'en'}),
+    'BNC-Spoken':       StatData(
+        get_bnc_spoken_written_freq_data,                       {(True, False): 'en'}),
     'CREA-Spoken':      StatData(get_alonso_freq_data,          {(): 'es'}),
     'CSJ':              StatData(get_csj_freq_data,             {(): 'ja'}),
     'HKUST/MTS':        StatData(get_hkust_mtsc_freq_data,      {(): 'zh'}),
@@ -657,20 +665,14 @@ STATS_CORPORA: dict[str, StatData] = {
     }
 
 STATS_DATASETS: dict[str, StatData] = {
-    'Lexical Decision Time': StatData(get_ldt_data,                  ['en', 'es', 'zh']),
-    'Lexical Complexity':             StatData(get_mlsp_dataset,              ['en', 'es', 'ja']),
-    'Word Familiarity':              StatData(get_familiarity_data,          ALL_LANGS),
+    'Lexical Decision Time':    StatData(get_ldt_data,      ['en', 'es', 'zh']),
+    'Lexical Complexity':       StatData(get_mlsp_dataset,  ['en', 'es', 'ja']),
+    'Word Familiarity':         StatData(get_familiarity_data, ALL_LANGS),
     'Word Familiarity (Alternative)':          StatData(get_familiarity_data, {
         ('en', True): 'en',
         ('es', False, False, True): 'es',
         ('ja', False, False, False, True): 'ja',
         })
-#     'Word Familiarity':          StatData(get_familiarity_data, {
-#         **{(lang,): lang  for lang in ALL_LANGS},
-#         ('en', True): 'English (Glasgow)',
-#         ('es', False, False, True): 'Spanish (Moreno-Martínez)',
-#         ('ja', False, False, False, True): 'Japanese (Amano+Kondo)',
-#         })
     }
 
 
@@ -774,7 +776,6 @@ def main(args: argparse.Namespace) -> None:
                 f'--form: {args.form}'
                 )
         os.makedirs(tubelex_cache_dir, exist_ok=True)
-
 
     if train:
         if output_files:
@@ -926,7 +927,7 @@ def main(args: argparse.Namespace) -> None:
         if (freq_data := lang2freq_data.get(lang)) is not None:
             return freq_data.smooth_frequency_missing(w)
         # We cannot smooth frequencies from wordfreq, so we use minimum instead:
-        return wf_frequency_missing(w, lang, minimum=FREQ_EPS)
+        return wf_frequency_missing(w, lang, minimum=get_wf_min_freq(lang))
 
     def agg_frequency_missing(s: str, lang: str) -> [float, bool]:
         s_norm = nfkc_lower(s)
