@@ -10,15 +10,15 @@ RESULT_TOL = 0.00001  # We use 4 decimal places in the original data
 STAT_PREC = 0
 
 GROUP2NAME = {
-    0: r'spoken',
-    1: r'subtitle',
+    0: r'speech',
+    1: r'film/TV subtitles',
     2: r'other',
     3: r'our\vphantom{l}'    # alignment with previous group names after rotation
     }
 
 GROUP2NAME_SMALL = {    # TODO now unnecessary DELETEME
-    0: r'\scriptsize spoken',
-    1: r'subtitle',
+    0: r'\scriptsize speech',
+    1: r'film/TV subtitles',
     2: r'other',
     3: r'our\vphantom{l}'    # alignment with previous group names after rotation
     }
