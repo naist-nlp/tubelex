@@ -1,4 +1,4 @@
-file	language	correlation	corr_tubelex	n	n_missing
-spanish_lcp_labels	Spanish	-0.6280	0.8968	593	1
-english_lcp_labels	English	-0.7208	0.9034	570	10
-japanese_lcp_labels	Japanese	-0.1914	0.2894	570	345
+file	language	correlation	corr_tubelex	n	n_missing	corr_without_missing
+spanish_lcp_labels	Spanish	-0.6280171100379882	0.8967927464601511	593	1	-0.6310216701886254
+english_lcp_labels	English	-0.7208218825997619	0.9033776634316393	570	10	-0.7095981017476987
+japanese_lcp_labels	Japanese	-0.1913790360844072	0.28942987471530646	570	345	-0.6107793662669994

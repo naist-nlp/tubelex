@@ -1,2 +1,2 @@
-file	language	correlation	corr_tubelex	n	n_missing
-english_lcp_labels	English	-0.7174	0.8832	570	23
+file	language	correlation	corr_tubelex	n	n_missing	corr_without_missing
+english_lcp_labels	English	-0.7173693819039385	0.8831823271163631	570	23	-0.6558593362597174
