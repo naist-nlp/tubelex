@@ -13,14 +13,16 @@ GROUP2NAME = {
     0: r'speech',
     1: r'film/TV subtitles',
     2: r'other',
-    3: r'our\vphantom{l}'    # alignment with previous group names after rotation
+    3: r'our\vphantom{l}',    # alignment with previous group names after rotation
+    4: r'top ST'
     }
 
 GROUP2NAME_SMALL = {    # TODO now unnecessary DELETEME
     0: r'\scriptsize speech',
     1: r'film/TV subtitles',
     2: r'other',
-    3: r'our\vphantom{l}'    # alignment with previous group names after rotation
+    3: r'our\vphantom{l}',    # alignment with previous group names after rotation
+    4: r'top ST'
     }
 
 VALID_CORPORA2GROUP = {
@@ -42,6 +44,9 @@ VALID_CORPORA2GROUP = {
     'TUBELEX\\textsubscript{regex}': 3,
     'TUBELEX\\textsubscript{base}': 3,
     'TUBELEX\\textsubscript{lemma}': 3,
+    'Archaelogy (ID=2)': 4,
+    'GMU (ID=1)': 4,
+    'TMU-HIT (ID=2)': 4
     }
 
 # def _add_group_separators_by_line(tex: Sequence[str]) -> Iterator[str]:
@@ -219,21 +224,21 @@ def alternate_row_bg(df: pd.DataFrame | pd.Series):
 
 
 def main():
-    for results_id, best, header_levels in (
-        ('mlsp', 'min', 1),
-        ('ldt', 'min', 1),
-        ('fam', 'max', 1),
-        ('fam-alt', 'max', 2),
+    for results_id, best, header_levels, results_metric, in (
+        ('mlsp', 'min', 1, None),
+        ('ldt', 'min', 1, None),
+        ('fam', 'max', 1, None),
+        ('fam-alt', 'max', 2, None),
+        ('mlsp', 'max', 1, 'correlation'),
+        ('mlsp', 'max', 1, 'R2'),
         ):
         tsv_header = list(range(header_levels))
         r = add_group_level(limit_to_valid_corpora(pd.read_table(
-            f'experiments/{results_id}-corr-aggregate-correlation.tsv',
+            (f'experiments/{results_id}-results-aggregate-{results_metric}.tsv'
+             if (results_metric is not None) else
+             f'experiments/{results_id}-corr-aggregate-correlation.tsv'),
             index_col=0, header=tsv_header
             )))  # TODO DELETEME , small=(results_id == 'fam-alt') also in p
-        p = add_group_level(limit_to_valid_corpora(pd.read_table(
-            f'experiments/{results_id}-corr-aggregate-pvalues.tsv',
-            index_col=0, header=tsv_header
-            )))
 
         s = Styler(r, precision=RESULT_PREC, na_rep='---')
 
@@ -243,7 +248,12 @@ def main():
             cmap='Blues', bool_subset=r_not_na,
             gmap=(-r if (best == 'min') else r),
             )
-        s = add_p_stars(s, p)           # TODO: add pad if we add a mean column?
+        if results_metric is None:
+            p = add_group_level(limit_to_valid_corpora(pd.read_table(
+                f'experiments/{results_id}-corr-aggregate-pvalues.tsv',
+                index_col=0, header=tsv_header
+                )))
+            s = add_p_stars(s, p)           # TODO: add pad if we add a mean column?
         s = highlight_extreme(
             s, props='textbf:--latex--rwrap;', op=best
             )  # Inside p_stars
@@ -255,7 +265,11 @@ def main():
             convert_css=True  # for background_gradient
             ))
         latex_id = results_id.replace('-', '_')
-        with open(f'experiments/tables/{latex_id}_corr.tex', 'w') as fo:
+        latex_name = latex_id + (
+            '_corr' if results_metric is None else
+            f'_results_{results_metric}'
+            )
+        with open(f'experiments/tables/{latex_name}.tex', 'w') as fo:
             fo.write(tex)
 
         for stats_id, index_levels in (

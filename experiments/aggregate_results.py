@@ -2,7 +2,6 @@ from collections import defaultdict
 import pandas as pd
 import numpy as np
 import os
-import sys
 from corrstats import dependent_corr
 
 
@@ -52,6 +51,10 @@ TASK2NAME = {
     'mlsp': 'Complexity',
     }
 
+COL2ID = {
+    'Pearson\'s r': 'correlation'
+    }
+
 
 def dependent_corr_pvalue_or_nan(
     xy, xz, yz, n, twotailed=True, conf_level=0.95, method='steiger'
@@ -70,18 +73,20 @@ def dependent_corr_pvalue_or_nan(
         return 1
     return p
 
+
 LANG2ALT_DESC = {
     'English': '(Glasgow)',
     'Spanish': '(Moreno-Martínez)',
     'Japanese': '(Amano+Kondo)'
     }
 
+
 def main():
     # Unnecessary:
     # task_name2df = {}
     # task_name2df_p = {}
     for filename, cols, add_mlsp, task in (
-        ('experiments/mlsp-results', ['R2'], True, None),
+        ('experiments/mlsp-results', ['R2', 'Pearson\'s r'], True, None),
         *((
             f'experiments/{task}-corr',
             ['correlation', 'corr_tubelex', 'n', 'n_missing', 'corr_without_missing'],
@@ -90,7 +95,7 @@ def main():
             ) for task in ('ldt', 'fam', 'fam-alt', 'mlsp'))
             # Exclude 'ldtz' (LDT z-scores) : we have z-scores only for en and zh, and
             # the results are basically the same as for means ('ldt').
-        ):
+            ):
 
         d = defaultdict(dict)
 
@@ -104,10 +109,13 @@ def main():
                         d[col][corpus] = df[col]
 
         if add_mlsp:
-            print(f'Reading MLSP shared task data')
-            mlsp = pd.read_table(f'{filename}-shared-task.tsv', index_col='language')
-            for c in ('Archaelogy (ID=2)', 'TMU-HIT (ID=2)'):
-                d['R2'][c] = mlsp[c]
+            for col in cols:
+                col_id = COL2ID.get(col, col)
+                print(f'Reading MLSP shared task data for {col_id}')
+                mlsp = pd.read_table(f'{filename}-shared-task-{col_id}.tsv',
+                                     index_col='language')
+                for c in mlsp.columns:
+                    d[col][c] = mlsp[c]
 
         combined_dfs = {}
 
@@ -120,7 +128,8 @@ def main():
                     [LANG2ALT_DESC[lang] for lang in combined.columns]
                     ], names=None)
 
-            combined.to_csv(f'{filename}-aggregate-{col}.tsv', sep='\t')
+            col_id = COL2ID.get(col, col)
+            combined.to_csv(f'{filename}-aggregate-{col_id}.tsv', sep='\t')
             combined_dfs[col] = combined
 
         if 'correlation' in cols:
