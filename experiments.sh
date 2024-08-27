@@ -287,9 +287,9 @@ python experiments/run.py $alt_opt --activ-es 								      --corr --fam es  		>
 echo gini
 python experiments/run.py $alt_opt --minus --gini en ja 					      --corr --fam en ja    > experiments/fam-alt-corr-gini.tsv
 echo subimdb
-python experiments/run.py $alt_opt --subimdb 									  --corr  --fam en   	> experiments/fam-corr-subimdb.tsv
+python experiments/run.py $alt_opt --subimdb 									  --corr  --fam en   	> experiments/fam-alt-corr-subimdb.tsv
 echo spoken-bnc
-python experiments/run.py $alt_opt --spoken-bnc 								  --corr  --fam en   	> experiments/fam-corr-spoken-bnc.tsv
+python experiments/run.py $alt_opt --spoken-bnc 								  --corr  --fam en   	> experiments/fam-alt-corr-spoken-bnc.tsv
 echo laborotv
 python experiments/run.py $alt_opt -D ipadic --laborotv 						  --corr --fam ja 		> experiments/fam-alt-corr-laborotv.tsv
 
