@@ -264,10 +264,10 @@ do
 		fi
 	fi
 	echo "$corpus"
-	python experiments/run.py $cache_opt $corpus_opt     en es ja           --corr --fam en es > experiments/fam-alt-corr-${corpus}.tsv
+	python experiments/run.py $cache_opt $corpus_opt     en es ja           --corr --fam en es ja > experiments/fam-alt-corr-${corpus}.tsv
 	if [[ "$corpus" =~ ^tubelex ]]
 	then
-		python experiments/run.py $corpus_opt en es ja --form lemma         --corr --fam en es  > experiments/fam-alt-corr-${corpus}-lemma.tsv
+		python experiments/run.py $corpus_opt en es ja --form lemma         --corr --fam en es ja  > experiments/fam-alt-corr-${corpus}-lemma.tsv
 		python experiments/run.py $corpus_opt    ja       --form base 		   --corr --fam    ja        > experiments/fam-alt-corr-${corpus}-base.tsv
 		python experiments/run.py $corpus_opt en es --tokenization regex --corr --fam en es  > experiments/fam-alt-corr-${corpus}-regex.tsv
 	fi

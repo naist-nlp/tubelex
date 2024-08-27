@@ -12,7 +12,6 @@ SUBTLEX	2024.0	89.0			20.0
 SUBTLEX-UK		69.0			
 GINI		298.0		23610.0	
 Wikipedia	347.0	4.0	12.0	5860.0	0.0
-Wikipedia_R			12.0		
 wordfreq	3.0	21.0	100.0	9576.0	0.0
 TUBELEX\textsubscript{default}	635.0	37.0	10.0	7521.0	0.0
 TUBELEX\textsubscript{regex}		35.0	10.0		0.0

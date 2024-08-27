@@ -2,26 +2,26 @@
 	(Glasgow)	(Amano+Kondo)	(Moreno-Martínez)
 BNC-Spoken	0.041624		
 CREA-Spoken			0.000000
-CSJ			
+CSJ		0.000000	
 ACTIV-ES			0.000000
 EsPal			0.003172
-LaboroTV1+2			
-OpenSubtitles	0.518795		0.867244
+LaboroTV1+2		0.000727	
+OpenSubtitles	0.518795	0.000000	0.867244
 SubIMDB	0.000001		
 SUBTLEX	0.437411		0.082590
 SUBTLEX-UK	0.000000		
-GINI	0.000000		
-Wikipedia	0.000000		0.000000
-wordfreq	0.002581		0.000001
-TUBELEX\textsubscript{default}			
+GINI	0.000000	0.000000	
+Wikipedia	0.000000	0.000000	0.000000
+wordfreq	0.005233	0.000000	0.000000
+TUBELEX\textsubscript{default}		1.000000	
 TUBELEX\textsubscript{regex}	0.305712		0.967026
-TUBELEX\textsubscript{base}			
-TUBELEX\textsubscript{lemma}	0.018879		0.887861
-TUBELEX_entertainment	0.000000		0.009173
-TUBELEX_entertainment_L	0.006335		0.142010
-TUBELEX_entertainment_B			
+TUBELEX\textsubscript{base}		0.000000	
+TUBELEX\textsubscript{lemma}	0.018879	0.000102	0.887861
+TUBELEX_entertainment	0.000000	0.000000	0.009173
+TUBELEX_entertainment_L	0.006335	0.000000	0.142010
+TUBELEX_entertainment_B		0.000000	
 TUBELEX_entertainment_R	0.000000		0.017888
-TUBELEX_comedy	0.000140		0.000000
-TUBELEX_comedy_L	0.008078		0.000000
-TUBELEX_comedy_B			
+TUBELEX_comedy	0.000140	0.000000	0.000000
+TUBELEX_comedy_L	0.008078	0.000000	0.000000
+TUBELEX_comedy_B		0.000000	
 TUBELEX_comedy_R	0.000355		0.000000

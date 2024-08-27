@@ -8,10 +8,8 @@ OpenSubtitles	52.0	451.0	8027.0
 SubIMDB		1630.0	
 SUBTLEX	0.0	3469.0	25774.0
 SUBTLEX-UK		2969.0	
-SUBTLEX_R		3469.0	25774.0
 GINI		16915.0	
 Wikipedia	84.0	229.0	6238.0
-Wikipedia_R		229.0	6238.0
 wordfreq	27.0	941.0	10169.0
 TUBELEX\textsubscript{default}	373.0	1175.0	8831.0
 TUBELEX\textsubscript{regex}		1172.0	8911.0

@@ -7,14 +7,10 @@ EsPal			593.0
 LaboroTV1+2		570.0	
 OpenSubtitles	570.0	570.0	593.0
 SubIMDB	570.0		
-SubIMDB_R	570.0		
 SUBTLEX	570.0		593.0
 SUBTLEX-UK	570.0		
-SUBTLEX_R	570.0		593.0
 GINI	570.0	570.0	
-GINI_R	570.0		
 Wikipedia	570.0	570.0	593.0
-Wikipedia_R	570.0		593.0
 wordfreq	570.0	570.0	593.0
 TUBELEX\textsubscript{default}	570.0	570.0	593.0
 TUBELEX\textsubscript{regex}	570.0		593.0
