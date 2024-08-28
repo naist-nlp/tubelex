@@ -447,6 +447,8 @@ def parse_args() -> argparse.Namespace:
     action.add_argument('--correlation', action='store_true',
                         help='Compute correlation.')
 
+    parser.add_argument('--stats-coverage', default='experiments/stats-coverage.csv',
+                        help='Output CSV file for coverage stats.')
     parser.add_argument('--stats-datasets', default='experiments/stats-datasets.csv',
                         help='Output CSV file for dataset stats.')
     parser.add_argument('--stats-corpora', default='experiments/stats-corpora.csv',
@@ -643,6 +645,7 @@ class StatData(NamedTuple):
 
 ALL_LANGS = ['en', 'es', 'zh', 'id', 'ja']
 
+TDEFAULT = 'TUBELEX\\textsubscript{default}'
 STATS_CORPORA: dict[str, StatData] = {
     'BNC-Spoken':       StatData(
         get_bnc_spoken_written_freq_data,                       {(True, False): 'en'}),
@@ -661,7 +664,7 @@ STATS_CORPORA: dict[str, StatData] = {
     'Wikipedia':        StatData(get_wiki_freq_data,            ALL_LANGS),
     'wordfreq':         StatData(wf.get_frequency_dict,         ALL_LANGS),
 
-    'TUBELEX\\textsubscript{default}': StatData(get_tubelex_freq_data, ALL_LANGS)
+    TDEFAULT:           StatData(get_tubelex_freq_data, ALL_LANGS)
     }
 
 STATS_DATASETS: dict[str, StatData] = {
@@ -676,49 +679,111 @@ STATS_DATASETS: dict[str, StatData] = {
     }
 
 
-def do_stats(path_datasets: str, path_corpora: str) -> None:
+def lang_rows2cols(df: pd.DataFrame) -> pd.DataFrame:
+    return df.rename(
+        lambda lang: LANG2FULL_NAME.get(lang, lang)
+        ).sort_index().transpose()
+
+
+FULL_LANG2SHORT = {short: lang for lang, short in LANG2FULL_NAME.items()}
+
+
+def lang_rows2short(df: pd.DataFrame) -> pd.DataFrame:
+    return df.rename(
+        lambda lang: FULL_LANG2SHORT.get(lang, lang)
+        )
+
+
+def sort_by_corpus(df: pd.DataFrame) -> pd.DataFrame:
+    corpora_order = list(STATS_CORPORA.keys())
+    return df.sort_index(
+        # Keep columns in `corpora_order`:
+        axis=1,
+        key=lambda cols: pd.Index(map(
+            lambda col: corpora_order.index(col) if (col in corpora_order)
+            else col,
+            cols
+            ))
+        )
+
+
+def filter_corpora(df: pd.DataFrame) -> pd.DataFrame:
+    return df.loc[[c in STATS_CORPORA for c in df.index]]
+
+
+def do_stats(path_datasets: str, path_corpora: str, path_coverage: str) -> None:
     sizes = {}
     tokens = {}
     types = {}
 
-    for path, name2stat_data, is_dataset in (
-        (path_corpora, STATS_CORPORA, False),
-        (path_datasets, STATS_DATASETS, True),
-        ):
-        for name, stat_data in tqdm(iterable=name2stat_data.items(), desc=path):
-            ld = stat_data.data()
-            if is_dataset:
-                sizes[name] = {lang: len(data) for lang, data in ld.items()}
-            else:
-                tokens[name] = {
-                    lang: StatData.tokens(data) for lang, data in ld.items()
-                    }
-                types[name] = {lang: StatData.types(data) for lang, data in ld.items()}
+#     for path, name2stat_data, is_dataset in (
+#         (path_corpora, STATS_CORPORA, False),
+#         (path_datasets, STATS_DATASETS, True),
+#         ):
+#         for name, stat_data in tqdm(iterable=name2stat_data.items(), desc=path):
+#             ld = stat_data.data()
+#             if is_dataset:
+#                 sizes[name] = {lang: len(data) for lang, data in ld.items()}
+#             else:
+#                 tokens[name] = {
+#                     lang: StatData.tokens(data) for lang, data in ld.items()
+#                     }
+#                 types[name] = {lang: StatData.types(data) for lang, data in ld.items()}
+#
+#         if is_dataset:
+#             df = pd.DataFrame(sizes)
+#         else:
+#             df_tokens = sort_by_corpus(pd.DataFrame(tokens))
+#             df_types = sort_by_corpus(pd.DataFrame(types))
+#             lang_rows2cols(df_tokens).to_csv(
+#                 path.replace('.csv', '-tokens.csv'), float_format='%d'
+#                 )
+#             lang_rows2cols(df_types).to_csv(
+#                 path.replace('.csv', '-types.csv'), float_format='%d'
+#                 )
+#
+#             df = sort_by_corpus(pd.concat({
+#                 'tokens': df_tokens,
+#                 'types': df_types,
+#                 }, axis=1).swaplevel(axis=1))
+#
+#         # languages as rows->columns, sort alphabetically:
+#         df = lang_rows2cols(df)
+#
+#         # prevent .0 floats
+#         df.to_csv(path, float_format='%d')
 
-        if is_dataset:
-            df = pd.DataFrame(sizes)
-        else:
-            corpora_order = list(STATS_CORPORA.keys())
-            df = pd.concat({
-                'tokens': pd.DataFrame(tokens),
-                'types': pd.DataFrame(types),
-                }, axis=1).swaplevel(axis=1).sort_index(
-                    # Keep columns in `corpora_order`:
-                    axis=1,
-                    key=lambda cols: pd.Index(map(
-                        lambda col: corpora_order.index(col) if (col in corpora_order)
-                        else col,
-                        cols
-                        ))
-                    )
-        # languages as rows->columns, sort alphabetically:
-        df = df.rename(
-            lambda lang: LANG2FULL_NAME.get(lang, lang)
-            ).sort_index().transpose()
+    # Coverge:
 
-        # prevent .0 floats
-        df.to_csv(path, float_format='%d')
+    df_tok = pd.read_csv('experiments/stats-corpora-tokens.csv', index_col=0)
 
+    for task in ('mlsp', 'fam', 'ldt'):
+        df_missing = filter_corpora(
+            pd.read_table(f'experiments/{task}-corr-aggregate-n_missing.tsv',
+                          index_col=0)
+            )
+        df_total = filter_corpora(
+            pd.read_table(f'experiments/{task}-corr-aggregate-n.tsv', index_col=0)
+            )
+        df_cov = 1 - (df_missing/df_total)
+        # df_cov.to_csv('experiments/fam-corr-aggregate-cov.csv')
+
+        df_tok_cov = pd.concat({
+            'tokens': df_tok.stack(),
+            'coverage': df_cov.stack()
+            }, axis=1)
+        df_tok_cov = lang_rows2short(
+            df_tok_cov.loc[~df_tok_cov['tokens'].isna()].rename(
+                lambda c: 'TUBELEX' if c == TDEFAULT else c
+                )
+            )
+        df_tok_cov.index = (
+            df_tok_cov.index.get_level_values(0) + ':' +
+            df_tok_cov.index.get_level_values(1)
+            )
+        df_tok_cov.drop(['OpenSubtitles:ja'], inplace=True) # outlier
+        path = path_coverage.replace('.csv', f'-{task}.csv')
+        df_tok_cov.to_csv(path)
 
 def main(args: argparse.Namespace) -> None:
     # Input data:
@@ -743,7 +808,8 @@ def main(args: argparse.Namespace) -> None:
     f_lookups = None
 
     if args.stats:
-        do_stats(path_datasets=args.stats_datasets, path_corpora=args.stats_corpora)
+        do_stats(path_datasets=args.stats_datasets, path_corpora=args.stats_corpora,
+                 path_coverage=args.stats_coverage)
         return
 
     if args.log_lookups is not None:
