@@ -721,42 +721,42 @@ def do_stats(path_datasets: str, path_corpora: str,
     tokens = {}
     types = {}
 
-#     for path, name2stat_data, is_dataset in (
-#         (path_corpora, STATS_CORPORA, False),
-#         (path_datasets, STATS_DATASETS, True),
-#         ):
-#         for name, stat_data in tqdm(iterable=name2stat_data.items(), desc=path):
-#             ld = stat_data.data()
-#             if is_dataset:
-#                 sizes[name] = {lang: len(data) for lang, data in ld.items()}
-#             else:
-#                 tokens[name] = {
-#                     lang: StatData.tokens(data) for lang, data in ld.items()
-#                     }
-#                 types[name] = {lang: StatData.types(data) for lang, data in ld.items()}
-#
-#         if is_dataset:
-#             df = pd.DataFrame(sizes)
-#         else:
-#             df_tokens = sort_by_corpus(pd.DataFrame(tokens))
-#             df_types = sort_by_corpus(pd.DataFrame(types))
-#             lang_rows2cols(df_tokens).to_csv(
-#                 path.replace('.csv', '-tokens.csv'), float_format='%d'
-#                 )
-#             lang_rows2cols(df_types).to_csv(
-#                 path.replace('.csv', '-types.csv'), float_format='%d'
-#                 )
-#
-#             df = sort_by_corpus(pd.concat({
-#                 'tokens': df_tokens,
-#                 'types': df_types,
-#                 }, axis=1).swaplevel(axis=1))
-#
-#         # languages as rows->columns, sort alphabetically:
-#         df = lang_rows2cols(df)
-#
-#         # prevent .0 floats
-#         df.to_csv(path, float_format='%d')
+    for path, name2stat_data, is_dataset in (
+        (path_corpora, STATS_CORPORA, False),
+        (path_datasets, STATS_DATASETS, True),
+        ):
+        for name, stat_data in tqdm(iterable=name2stat_data.items(), desc=path):
+            ld = stat_data.data()
+            if is_dataset:
+                sizes[name] = {lang: len(data) for lang, data in ld.items()}
+            else:
+                tokens[name] = {
+                    lang: StatData.tokens(data) for lang, data in ld.items()
+                    }
+                types[name] = {lang: StatData.types(data) for lang, data in ld.items()}
+
+        if is_dataset:
+            df = pd.DataFrame(sizes)
+        else:
+            df_tokens = sort_by_corpus(pd.DataFrame(tokens))
+            df_types = sort_by_corpus(pd.DataFrame(types))
+            lang_rows2cols(df_tokens).to_csv(
+                path.replace('.csv', '-tokens.csv'), float_format='%d'
+                )
+            lang_rows2cols(df_types).to_csv(
+                path.replace('.csv', '-types.csv'), float_format='%d'
+                )
+
+            df = sort_by_corpus(pd.concat({
+                'tokens': df_tokens,
+                'types': df_types,
+                }, axis=1).swaplevel(axis=1))
+
+        # languages as rows->columns, sort alphabetically:
+        df = lang_rows2cols(df)
+
+        # prevent .0 floats
+        df.to_csv(path, float_format='%d')
 
     # Size-Coverge/Correlation:
 
@@ -774,7 +774,7 @@ def do_stats(path_datasets: str, path_corpora: str,
             pd.read_table(f'experiments/{task}-corr-aggregate-correlation.tsv',
                           index_col=0)
             )
-        df_cov = 1 - (df_missing/df_total)
+        df_cov = 1 - (df_missing / df_total)
         # df_cov.to_csv('experiments/fam-corr-aggregate-cov.csv')
 
         for yname, ydata, ypath in (
@@ -794,9 +794,10 @@ def do_stats(path_datasets: str, path_corpora: str,
                 df_tok_y.index.get_level_values(0) + ':' +
                 df_tok_y.index.get_level_values(1)
                 )
-            df_tok_y.drop(['OpenSubtitles:ja'], inplace=True) # outlier
+            df_tok_y.drop(['OpenSubtitles:ja'], inplace=True)  # outlier
             task_path = ypath.replace('.csv', f'-{task}.csv')
             df_tok_y.to_csv(task_path)
+
 
 def main(args: argparse.Namespace) -> None:
     # Input data:

@@ -1,20 +1,16 @@
 import pandas as pd
 import numpy as np
-import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 from adjustText import adjust_text
 
 
-
 def main():
     for task in ('mlsp', 'ldt', 'fam'):    # no fam
-        data_path = f'experiments/stats-size-correlation-{task}.csv'
-        fig_path = f'experiments/figures/{task}_size_correlation.pdf'
         df = pd.read_csv(f'experiments/stats-size-correlation-{task}.csv', index_col=0)
+        fig_path = f'experiments/figures/{task}_size_correlation.pdf'
 
         df['log10_tokens'] = np.log10(df['tokens'])
-
 
         corpus_kind = list(pd.Series(df.index).str.partition(':')[0])
 
@@ -25,7 +21,6 @@ def main():
             x=df['log10_tokens'], y=df['correlation'], hue=corpus_kind, legend=False
             )
 
-
         texts = []
         for i in range(df.shape[0]):
             text = df.index[i]
@@ -35,14 +30,12 @@ def main():
                          ha='center',
                          fontweight=('bold' if text.startswith('TUBELEX') else 'normal')
                          )
-            )
+                )
 
         adjust_text(
             texts,
             arrowprops=dict(arrowstyle='->', color='gray', lw=0.5),
             min_arrow_len=0,
-#             force_explode=(0,10),
-#             force_pull=(0,0)
             )
 
         plt.xlabel('Corpus Size: log$_{10}$(#tokens)')
@@ -54,6 +47,7 @@ def main():
         # plt.title(f'{task}: Coverage vs. corpus size')
 
         plt.savefig(fig_path, bbox_inches='tight')
+
 
 if __name__ == '__main__':
     main()

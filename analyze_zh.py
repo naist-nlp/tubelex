@@ -6,7 +6,6 @@ from tubelex import (
     )
 from collections import Counter
 from typing import Optional
-import sys
 from tqdm import tqdm
 import hanzidentifier as hzid
 

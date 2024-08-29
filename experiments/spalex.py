@@ -1,7 +1,6 @@
 import os
 import sys
 import pandas as pd
-import numpy as np
 from frequency_data import download_if_necessary
 
 SPALEX_DIR = 'data/downloads/spalex/'
@@ -15,6 +14,7 @@ SPALEX_PATH2URL = {
     SPALEX_LEXICAL: 'https://figshare.com/ndownloader/files/11209613'
     }
 
+
 def get_spalex(redo=False):
     if redo or not os.path.exists(SPALEX_MEAN):
         for path, url in SPALEX_PATH2URL.items():
@@ -27,7 +27,7 @@ def get_spalex(redo=False):
 
         # Compute mean RT for words (exclude non-words) including incorrect trials:
         print('Computing mean RT', file=sys.stderr)
-        is_w = (lexical['lexicality']=='W')
+        is_w = (lexical['lexicality'] == 'W')
         lexical = lexical.loc[is_w, ['spelling', 'rt']]
 
         # "Trim" RT/ms to [200, 2000] based on (Aguasvivas et al., 2018)
@@ -56,11 +56,12 @@ def get_spalex(redo=False):
             file=sys.stderr
             )
 
-        mean_rt.rename_axis(index='word', inplace=True) # 'spelling' -> 'word'
+        mean_rt.rename_axis(index='word', inplace=True)  # 'spelling' -> 'word'
 
         mean_rt.to_csv(SPALEX_MEAN)
 
     return pd.read_csv(SPALEX_MEAN)
+
 
 if __name__ == '__main__':
     assert len(sys.argv) <= 2

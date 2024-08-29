@@ -1371,7 +1371,7 @@ def get_tokenizers(
     tokenize: Optional[Tokenizer] = None
     pos_tag: Optional[TokenizerTagger] = None
 
-    if lang == None:                # for already tokenized files
+    if lang is None:                # for already tokenized files
         def surface_tokenize(s):
             return s.split()
 
