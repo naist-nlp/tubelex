@@ -447,8 +447,12 @@ def parse_args() -> argparse.Namespace:
     action.add_argument('--correlation', action='store_true',
                         help='Compute correlation.')
 
-    parser.add_argument('--stats-coverage', default='experiments/stats-coverage.csv',
-                        help='Output CSV file for coverage stats.')
+    parser.add_argument('--stats-size-coverage',
+                        default='experiments/stats-size-coverage.csv',
+                        help='Output CSV file for size-coverage stats.')
+    parser.add_argument('--stats-size-correlation',
+                        default='experiments/stats-size-correlation.csv',
+                        help='Output CSV file for size-correlation stats.')
     parser.add_argument('--stats-datasets', default='experiments/stats-datasets.csv',
                         help='Output CSV file for dataset stats.')
     parser.add_argument('--stats-corpora', default='experiments/stats-corpora.csv',
@@ -711,7 +715,8 @@ def filter_corpora(df: pd.DataFrame) -> pd.DataFrame:
     return df.loc[[c in STATS_CORPORA for c in df.index]]
 
 
-def do_stats(path_datasets: str, path_corpora: str, path_coverage: str) -> None:
+def do_stats(path_datasets: str, path_corpora: str,
+             path_size_coverage: str, path_size_correlation: str) -> None:
     sizes = {}
     tokens = {}
     types = {}
@@ -753,7 +758,7 @@ def do_stats(path_datasets: str, path_corpora: str, path_coverage: str) -> None:
 #         # prevent .0 floats
 #         df.to_csv(path, float_format='%d')
 
-    # Coverge:
+    # Size-Coverge/Correlation:
 
     df_tok = pd.read_csv('experiments/stats-corpora-tokens.csv', index_col=0)
 
@@ -765,25 +770,33 @@ def do_stats(path_datasets: str, path_corpora: str, path_coverage: str) -> None:
         df_total = filter_corpora(
             pd.read_table(f'experiments/{task}-corr-aggregate-n.tsv', index_col=0)
             )
+        df_corr = filter_corpora(
+            pd.read_table(f'experiments/{task}-corr-aggregate-correlation.tsv',
+                          index_col=0)
+            )
         df_cov = 1 - (df_missing/df_total)
         # df_cov.to_csv('experiments/fam-corr-aggregate-cov.csv')
 
-        df_tok_cov = pd.concat({
-            'tokens': df_tok.stack(),
-            'coverage': df_cov.stack()
-            }, axis=1)
-        df_tok_cov = lang_rows2short(
-            df_tok_cov.loc[~df_tok_cov['tokens'].isna()].rename(
-                lambda c: 'TUBELEX' if c == TDEFAULT else c
+        for yname, ydata, ypath in (
+            ('coverage', df_cov, path_size_coverage),
+            ('correlation', df_corr, path_size_correlation)
+            ):
+            df_tok_y = pd.concat({
+                'tokens': df_tok.stack(),
+                yname: ydata.stack()
+                }, axis=1)
+            df_tok_y = lang_rows2short(
+                df_tok_y.loc[~df_tok_y['tokens'].isna()].rename(
+                    lambda c: 'TUBELEX' if c == TDEFAULT else c
+                    )
                 )
-            )
-        df_tok_cov.index = (
-            df_tok_cov.index.get_level_values(0) + ':' +
-            df_tok_cov.index.get_level_values(1)
-            )
-        df_tok_cov.drop(['OpenSubtitles:ja'], inplace=True) # outlier
-        path = path_coverage.replace('.csv', f'-{task}.csv')
-        df_tok_cov.to_csv(path)
+            df_tok_y.index = (
+                df_tok_y.index.get_level_values(0) + ':' +
+                df_tok_y.index.get_level_values(1)
+                )
+            df_tok_y.drop(['OpenSubtitles:ja'], inplace=True) # outlier
+            task_path = ypath.replace('.csv', f'-{task}.csv')
+            df_tok_y.to_csv(task_path)
 
 def main(args: argparse.Namespace) -> None:
     # Input data:
@@ -809,7 +822,9 @@ def main(args: argparse.Namespace) -> None:
 
     if args.stats:
         do_stats(path_datasets=args.stats_datasets, path_corpora=args.stats_corpora,
-                 path_coverage=args.stats_coverage)
+                 path_size_coverage=args.stats_size_coverage,
+                 path_size_correlation=args.stats_size_correlation
+                 )
         return
 
     if args.log_lookups is not None:
