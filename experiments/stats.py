@@ -105,6 +105,8 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+SAMPLE_STATS = 'experiments/stats-sample.csv'
+
 def main(args: argparse.Namespace):
     path    = args.frequencies
 
@@ -127,8 +129,21 @@ def main(args: argparse.Namespace):
             tubelex_freq2dict(p, freq_id, lang2d[m.group('lang')])
 
     df = pd.DataFrame(lang2d).transpose()       # rows = languages
+
+    if os.path.exists(SAMPLE_STATS):
+        df_sample = pd.read_csv('experiments/stats-sample.csv', index_col=0)
+        df = pd.merge(
+            df_sample, df, how='right',
+            left_index=True, right_index=True
+            )
+    else:
+        print(f'Warning: No {SAMPLE_STATS} file to merge.', file=sys.stderr)
+
+
     df.index.name = 'lang'
     df.to_csv(args.output, float_format='%d')   # prevent .0 floats
+
+
     print('Done.', file=sys.stderr)
 
 
