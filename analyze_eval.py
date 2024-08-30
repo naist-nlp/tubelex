@@ -155,8 +155,8 @@ ANN_LABELS = [
 
 # Order and descriptions for the final output
 ANN2DESC = {
-    'OK: Speech': 'Speech',
-    'OK: Song': 'Song lyrics',
+    'OK: Speech': 'Subtitles match speech in the target language',
+    'OK: Song': 'Subtitles match song in the target language',
     'Audio description': 'Audio description',
     'No speech in audio': 'No speech or song',
     'Synthesised speech in audio': 'Synthesized speech',
