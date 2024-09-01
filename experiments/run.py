@@ -11,6 +11,7 @@ from csv import QUOTE_NONE
 import numpy as np
 import wordfreq as wf  # word_frequency, tokenize, get_frequency_dict
 from itertools import chain
+from functools import partial
 from typing import NamedTuple, Any
 from tqdm import tqdm
 
@@ -282,8 +283,6 @@ def get_tubelex_freq_data(
         else None
         )
 
-    if language == 'es':
-        language = 'es-regex'
     return FrequencyData.from_file_url(
         filename=f'frequencies/tubelex-{language}-nfkc-lower.tsv.xz',
         total_row=True,
@@ -649,7 +648,7 @@ class StatData(NamedTuple):
 
 ALL_LANGS = ['en', 'es', 'zh', 'id', 'ja']
 
-TDEFAULT = 'TUBELEX\\textsubscript{default}'
+TDEFAULT = ''
 STATS_CORPORA: dict[str, StatData] = {
     'BNC-Spoken':       StatData(
         get_bnc_spoken_written_freq_data,                       {(True, False): 'en'}),
@@ -659,8 +658,9 @@ STATS_CORPORA: dict[str, StatData] = {
 
     'ACTIV-ES':         StatData(get_activ_es_data,             {(): 'es'}),
     'EsPal':            StatData(get_espal_freq_data,           {(): 'es'}),
-    'LaboroTV1+2':      StatData(get_laborotv_freq_data,       {(): 'ja'}),
+    'LaboroTV1+2':      StatData(get_laborotv_freq_data,        {(): 'ja'}),
     'OpenSubtitles':    StatData(get_opensubtitles_freq_data,   ALL_LANGS),
+    'SubIMDB':          StatData(get_subimdb_freq_data,         {(): 'en'}),
     'SUBTLEX':          StatData(get_sub_freq_data,             ['en', 'es', 'zh']),
     'SUBTLEX-UK':       StatData(get_sub_freq_data,             {('en-uk',): 'en'}),
 
@@ -668,7 +668,18 @@ STATS_CORPORA: dict[str, StatData] = {
     'Wikipedia':        StatData(get_wiki_freq_data,            ALL_LANGS),
     'wordfreq':         StatData(wf.get_frequency_dict,         ALL_LANGS),
 
-    TDEFAULT:           StatData(get_tubelex_freq_data, ALL_LANGS)
+    'TUBELEX\\textsubscript{default}': StatData(
+        get_tubelex_freq_data, ALL_LANGS
+        ),
+    'TUBELEX\\textsubscript{regex}': StatData(
+        partial(get_tubelex_freq_data, tokenization='regex'), ['en', 'es', 'id']
+        ),
+    'TUBELEX\\textsubscript{base}': StatData(
+        partial(get_tubelex_freq_data, form='base'), ['ja']
+        ),
+    'TUBELEX\\textsubscript{lemma}': StatData(
+        partial(get_tubelex_freq_data, form='lemma'), ['en', 'es', 'id', 'ja']
+        )
     }
 
 STATS_DATASETS: dict[str, StatData] = {
@@ -683,10 +694,17 @@ STATS_DATASETS: dict[str, StatData] = {
     }
 
 
-def lang_rows2cols(df: pd.DataFrame) -> pd.DataFrame:
-    return df.rename(
+def lang_rows2full(df: pd.DataFrame, name: Optional[str] = None) -> pd.DataFrame:
+    df = df.rename(
         lambda lang: LANG2FULL_NAME.get(lang, lang)
-        ).sort_index().transpose()
+        ).sort_index()
+    if name is not None:
+        df.index.name = name
+    return df
+
+
+def lang_rows2cols(df: pd.DataFrame) -> pd.DataFrame:
+    return lang_rows2full(df).transpose()
 
 
 FULL_LANG2SHORT = {short: lang for lang, short in LANG2FULL_NAME.items()}
@@ -786,9 +804,10 @@ def do_stats(path_datasets: str, path_corpora: str,
                 yname: ydata.stack()
                 }, axis=1)
             df_tok_y = lang_rows2short(
-                df_tok_y.loc[~df_tok_y['tokens'].isna()].rename(
-                    lambda c: 'TUBELEX' if c == TDEFAULT else c
-                    )
+                df_tok_y.loc[~df_tok_y['tokens'].isna()]
+                # DELETEME .rename(
+                #     lambda c: 'TUBELEX' if c == TDEFAULT else c
+                #     )
                 )
             df_tok_y.index = (
                 df_tok_y.index.get_level_values(0) + ':' +

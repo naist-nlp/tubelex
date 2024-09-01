@@ -11,12 +11,12 @@ SUBTLEX-UK		2969.0
 GINI		16915.0	
 Wikipedia	84.0	229.0	6238.0
 wordfreq	27.0	941.0	10169.0
-TUBELEX\textsubscript{default}	373.0	1175.0	8831.0
+TUBELEX\textsubscript{default}	373.0	1175.0	8751.0
 TUBELEX\textsubscript{regex}		1172.0	8911.0
 TUBELEX\textsubscript{lemma}		1016.0	7270.0
-TUBELEX_entertainment	1533.0	4756.0	16106.0
+TUBELEX_entertainment	1533.0	4756.0	15966.0
 TUBELEX_entertainment_L		3870.0	13955.0
 TUBELEX_entertainment_R		4740.0	16202.0
-TUBELEX_comedy	11750.0	18329.0	34046.0
+TUBELEX_comedy	11750.0	18329.0	33952.0
 TUBELEX_comedy_L		14727.0	31820.0
 TUBELEX_comedy_R		18300.0	34123.0

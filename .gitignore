@@ -60,3 +60,4 @@ tubelex-*-removed-addresses.tsv
 
 # large files
 /fasttext/
+/kenlm/

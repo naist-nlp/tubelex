@@ -1,9 +1,18 @@
 from functools import partial
 import pandas as pd
 import numpy as np
+from typing import Optional
 from pandas.io.formats.style import Styler  # type: ignore
 from pandas.io.formats.style_render import Subset
 import re
+import sys
+import os
+from run import lang_rows2full
+
+sys.path.append(os.path.join(os.path.dirname(__file__), os.pardir))
+
+from latex_utils import colapse_latex_table_header
+
 
 RESULT_PREC = 3
 RESULT_TOL = 0.00001  # We use 4 decimal places in the original data
@@ -66,7 +75,9 @@ VALID_CORPORA2GROUP = {
 #     return'\n'.join(_add_group_separators_by_line(tex.split('\n')))
 
 
-def add_group_level(df: pd.DataFrame, small: bool = False) -> pd.DataFrame:
+def add_group_level(
+    df: pd.DataFrame, name: Optional[str] = None, small: bool = False
+    ) -> pd.DataFrame:
     group2name = GROUP2NAME_SMALL if small else GROUP2NAME
     return df.set_index(pd.MultiIndex.from_arrays(
         [
@@ -78,7 +89,7 @@ def add_group_level(df: pd.DataFrame, small: bool = False) -> pd.DataFrame:
                     ),
                 df.index)),
             df.index
-            ], names=None
+            ], names=(None, name)
         ))
 
 
@@ -223,6 +234,13 @@ def alternate_row_bg(df: pd.DataFrame | pd.Series):
     return z
 
 
+STAT_COL2DESC = {
+    'videos_all': 'Videos:Found',
+    'files_valid': 'Videos:Valid',
+    'dedup_valid': 'Videos:Unique',
+    'default:tokens': 'Tokens:'
+    }
+
 def main():
     for results_id, best, header_levels, results_metric, in (
         ('mlsp', 'min', 1, None),
@@ -233,12 +251,15 @@ def main():
         ('mlsp', 'max', 1, 'R2'),
         ):
         tsv_header = list(range(header_levels))
-        r = add_group_level(limit_to_valid_corpora(pd.read_table(
-            (f'experiments/{results_id}-results-aggregate-{results_metric}.tsv'
-             if (results_metric is not None) else
-             f'experiments/{results_id}-corr-aggregate-correlation.tsv'),
-            index_col=0, header=tsv_header
-            )))  # TODO DELETEME , small=(results_id == 'fam-alt') also in p
+        r = add_group_level(
+            limit_to_valid_corpora(pd.read_table(
+                (f'experiments/{results_id}-results-aggregate-{results_metric}.tsv'
+                if (results_metric is not None) else
+                f'experiments/{results_id}-corr-aggregate-correlation.tsv'),
+                index_col=0, header=tsv_header
+                )),
+            name=('Corpus / ST System' if results_metric else 'Corpus')
+            )
 
         s = Styler(r, precision=RESULT_PREC, na_rep='---')
 
@@ -264,6 +285,8 @@ def main():
             column_format=col_fmt,
             convert_css=True  # for background_gradient
             ))
+        tex = colapse_latex_table_header(tex, r)
+
         latex_id = results_id.replace('-', '_')
         latex_name = latex_id + (
             '_corr' if results_metric is None else
@@ -272,42 +295,66 @@ def main():
         with open(f'experiments/tables/{latex_name}.tex', 'w') as fo:
             fo.write(tex)
 
-        for stats_id, index_levels in (
-            ('stats-corpora', 2),
-            ('stats-datasets', 1),
-            ):
-            csv_index = list(range(index_levels))
-            stats = pd.read_csv(
-                f'experiments/{stats_id}.csv',
-                index_col=csv_index
-                )  # TODO doesn't need limit_to_valid_corpora
+    for stats_id, index_levels in (
+        ('stats-corpora', 2),
+        ('stats-datasets', 1),
+        ):
+        csv_index = list(range(index_levels))
+        stats = pd.read_csv(
+            f'experiments/{stats_id}.csv',
+            index_col=csv_index
+            )  # TODO doesn't need limit_to_valid_corpora
 
-            if stats_id == 'stats-datasets':
-                lang_note = pd.Series(stats.columns).str.partition(' ')
-                # Only if not empty:
-                if (lang_note[2] != '').any():
-                    stats.columns = pd.MultiIndex.from_arrays(
-                        [lang_note[0], lang_note[2]], names=None
-                        )
+        if stats_id == 'stats-datasets':
+            lang_note = pd.Series(stats.columns).str.partition(' ')
+            # Only if not empty:
+            if (lang_note[2] != '').any():
+                stats.columns = pd.MultiIndex.from_arrays(
+                    [lang_note[0], lang_note[2]], names=None
+                    )
+            stats.rename_axis('Task', inplace=True)
+        else:
+            stats.rename_axis(('Corpus', None), inplace=True)
 
-            s = Styler(stats, precision=STAT_PREC, thousands=',', na_rep='---')
+        s = Styler(stats, precision=STAT_PREC, thousands=',', na_rep='---')
 
-            if stats_id == 'stats-corpora':
-                s = s.apply(alternate_row_bg, axis=None)
-                s = s.apply_index(alternate_row_bg, level=(index_levels - 1))
-            # TODO? use siunitx to add thousands separators
-            col_fmt = 'l' * s.data.index.nlevels + ('r') * len(s.data.columns)
-            tex = s.to_latex(
-                hrules=True,
-                # TODO add groups too? clines='skip-last;data',
-                # + kill_extra_cline()
-                column_format=col_fmt,
-                sparse_columns=False,   # repeat language names for datasets
-                #  convert_css=True # for background_gradient
-                )
-            latex_id = stats_id.replace('-', '_')
-            with open(f'experiments/tables/{latex_id}.tex', 'w') as fo:
-                fo.write(tex)
+        if stats_id == 'stats-corpora':
+            s = s.apply(alternate_row_bg, axis=None)
+            s = s.apply_index(alternate_row_bg, level=(index_levels - 1))
+        # TODO? use siunitx to add thousands separators
+        col_fmt = 'l' * s.data.index.nlevels + ('r') * len(s.data.columns)
+        tex = s.to_latex(
+            hrules=True,
+            # TODO add groups too? clines='skip-last;data',
+            # + kill_extra_cline()
+            column_format=col_fmt,
+            sparse_columns=False,   # repeat language names for datasets
+            #  convert_css=True # for background_gradient
+            )
+        tex = colapse_latex_table_header(tex, stats)
+        latex_id = stats_id.replace('-', '_')
+        with open(f'experiments/tables/{latex_id}.tex', 'w') as fo:
+            fo.write(tex)
+
+    stats = lang_rows2full(
+        pd.read_csv('experiments/stats.csv', index_col=0), name='Language'
+        ).reindex(
+            columns=list(STAT_COL2DESC)
+            ).rename(columns=STAT_COL2DESC)
+
+    col_levels = pd.Series(stats.columns).str.partition(':')
+    stats.columns = pd.MultiIndex.from_arrays(
+        [col_levels[0], col_levels[2]], names=None
+        )
+
+    s = Styler(stats, precision=STAT_PREC, thousands=',', na_rep='---')
+    col_fmt = 'l' * s.data.index.nlevels + ('r') * len(s.data.columns)
+    tex = s.to_latex(
+        hrules=True,
+        column_format=col_fmt
+        )
+    with open(f'experiments/tables/stats_EDITME.tex', 'w') as fo:
+        fo.write(tex)
 
 
 if __name__ == '__main__':

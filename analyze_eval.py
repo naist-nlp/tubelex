@@ -2,10 +2,10 @@ import os
 # from os.path import exists, splitext
 # import sys
 import argparse
-# import re
-from typing import Optional
+# from typing import Optional
 import pandas as pd
 from pandas.io.formats.style import Styler
+from latex_utils import colapse_latex_table_header
 
 # from vtt import vtt2cues
 # from freq_utils import Storage
@@ -232,6 +232,8 @@ def main() -> None:
         LANG2DESC.values(), axis=1
         )
 
+    props_by_lang.index.name = 'Evaluation Label'
+
     # props_by_lang.fillna(0.0, inplace=True)
     # props_by_lang = props_by_lang.transpose()
 
@@ -262,9 +264,9 @@ def main() -> None:
             formatter=lambda x: rf'{x*100:.2f}{{ \%}}',
             na_rep='---'
             )
-        tex = s.to_latex(
+        tex = colapse_latex_table_header(s.to_latex(
             hrules=True
-        )
+            ), props_by_lang)
         print()
         print(tex)
         f.write(tex)
