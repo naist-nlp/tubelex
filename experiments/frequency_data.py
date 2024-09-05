@@ -47,6 +47,7 @@ class FrequencyDataSpec(FrequencyDataSpecBase, total=False):
     total_header: bool
     header: bool | Sequence[str]
     cols: Sequence[str]
+    sub_lemma: Optional[str]  # subLemma for CSJ (joined using '-')
     delimiter: str
     cased: bool
     to_lower: bool
@@ -185,6 +186,7 @@ class FrequencyData(NamedTuple):
         total_header: bool = False,
         header: bool | Sequence[str] = True,
         cols: Optional[Sequence[str]] = None,
+        sub_lemma: Optional[str] = None,  # subLemma for CSJ (joined using '-')
         delimiter: str = DEFAULT_DELIMITER,
         cased: bool = False,
         to_lower: bool = False,
@@ -219,6 +221,9 @@ class FrequencyData(NamedTuple):
                     f'{exc_fn}Number of columns to read must be {COLS_RANGE}, '
                     f'but cols={cols}.'
                     )
+        if sub_lemma is not None:
+            if not cols:
+                raise ValueError(f'sub_lemma={sub_lemma}, but cols is None.')
 
         indices: Sequence[int] = range(COLS_DEFAULT)
         if header:
@@ -236,6 +241,8 @@ class FrequencyData(NamedTuple):
                     break
             if cols:
                 indices = [header_cols.index(c) for c in cols]
+                if sub_lemma is not None:
+                    sub_lemma_index = header_cols.index(sub_lemma)
 
         cd = Counter() if (len(indices) == COLS_DEFAULT) else None
 
@@ -247,7 +254,9 @@ class FrequencyData(NamedTuple):
             fields = line.split(delimiter)
             try:
                 word, freq, *opt_docs = (fields[i] for i in indices)
-
+                # Only add non-empty sub_lemma:
+                if (sub_lemma is not None) and (word_sl := fields[sub_lemma_index]):
+                    word = f'{word}-{word_sl}'
                 if to_lower:
                     word = word.lower()
 
@@ -340,6 +349,7 @@ class FrequencyData(NamedTuple):
         total_header: bool = False,
         header: bool | Sequence[str] = True,
         cols: Optional[Sequence[str]] = None,
+        sub_lemma: Optional[str] = None,  # subLemma for CSJ (joined using '-')
         delimiter: str = DEFAULT_DELIMITER,
         cased: bool = False,
         to_lower: bool = False,
@@ -348,8 +358,9 @@ class FrequencyData(NamedTuple):
         ) -> 'FrequencyData':
         with FrequencyData._open(filename, zip_args) as file:
             return FrequencyData.load(
-                file, total_row, total_header, header, cols, delimiter, cased, to_lower,
-                verbose=verbose, filename=filename, ignore_errors=ignore_errors
+                file, total_row, total_header, header, cols, sub_lemma, delimiter,
+                cased, to_lower, verbose=verbose, filename=filename,
+                ignore_errors=ignore_errors
                 )
 
     @staticmethod
@@ -361,6 +372,7 @@ class FrequencyData(NamedTuple):
         total_header: bool = False,
         header: bool | Sequence[str] = True,
         cols: Optional[Sequence[str]] = None,
+        sub_lemma: Optional[str] = None,  # subLemma for CSJ (joined using '-')
         delimiter: str = DEFAULT_DELIMITER,
         cased: bool = False,
         to_lower: bool = False,
@@ -376,8 +388,8 @@ class FrequencyData(NamedTuple):
             sys.stderr.write(f'Local file "{filename}".\n')
 
         return FrequencyData.from_file(
-            filename, zip_args, total_row, total_header, header, cols, delimiter, cased,
-            to_lower, verbose=verbose, ignore_errors=ignore_errors
+            filename, zip_args, total_row, total_header, header, cols, sub_lemma,
+            delimiter, cased, to_lower, verbose=verbose, ignore_errors=ignore_errors
             )
 
     @staticmethod
