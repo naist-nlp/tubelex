@@ -1,7 +1,7 @@
 import argparse
 from collections import defaultdict
 from typing import Optional
-from collections.abc import Callable
+from collections.abc import Callable, Container
 import sys
 import os
 import re
@@ -14,7 +14,7 @@ from itertools import chain
 from functools import partial
 from typing import NamedTuple, Any
 from tqdm import tqdm
-
+import scipy
 from sklearn.linear_model import RidgeCV
 from sklearn.metrics import (
     mean_squared_error as mse_score, mean_absolute_error as mae_score, r2_score
@@ -316,7 +316,7 @@ def get_csj_freq_data(
         url=('https://repository.ninjal.ac.jp/record/3276/files/'
              'CSJ_frequencylist_suw_ver201803.zip'),
         total_row=False,
-        cols=['lemma', 'frequency']
+        cols=['lemma', 'frequency'], sub_lemma='subLemma'
         )
 
 
@@ -440,7 +440,9 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     action = parser.add_mutually_exclusive_group()
     action.add_argument('--stats', action='store_true',
-                        help='Write stats for corpora and datasets.')
+                        help='Compute stats for corpora and datasets.')
+    action.add_argument('--cmp', action='store_true',
+                        help='Compute comparison (JS dist, etc.) for corpora.')
     action.add_argument('--train', action='store_true',
                         help='Train linear regression.')
     action.add_argument('--correlation', action='store_true',
@@ -456,6 +458,10 @@ def parse_args() -> argparse.Namespace:
                         help='Output CSV file for dataset stats.')
     parser.add_argument('--stats-corpora', default='experiments/stats-corpora.csv',
                         help='Output CSV file for corpus stats.')
+    parser.add_argument('--cmp-corpora', default='experiments/cmp-corpora.csv',
+                        help='Output CSV file for corpus comparison.')
+    parser.add_argument('--cmp-languages', nargs='+', default=None,
+                        help='Limit comparison by language codes.')
 
     parser.add_argument('--cache-tubelex', action='store_true', help=(
         'Cache TUBELEX frequencies for correlation pvalue computation.'
@@ -617,20 +623,62 @@ class StatData(NamedTuple):
     get: Callable[[str], Any]
     langs: list[str] | dict[str, str]
 
-    def data(self) -> dict['str', Any]:
+    def data(self, languages: Container | None = None) -> dict['str', Any]:
         langs = self.langs
         args_langs = (
             langs.items() if isinstance(langs, dict) else
             zip(map(lambda lang: (lang,), langs), langs)
             )
-        return {lang: self.get(*args) for args, lang in args_langs}
+        return {
+            lang: self.get(*args) for args, lang in args_langs
+            if languages is None or (lang in languages)
+            }
 
+    @staticmethod
     def types(corpus: Any) -> int:
         if isinstance(corpus, FrequencyData):
             return len(corpus.f)
         assert isinstance(corpus, (pd.Series, dict))    # any Series or a wordfreq dict
         return len(corpus)
 
+    @staticmethod
+    def distribution(corpus: Any) -> pd.Series:
+        # We do not use smoothing to get a valid distribution
+        if isinstance(corpus, FrequencyData):
+            return pd.Series(corpus.f) / corpus.f_total
+        if isinstance(corpus, dict):        # wordfreq dict
+            return pd.Series(corpus)
+        assert isinstance(corpus, pd.Series)
+        if corpus.name == 'aes_orf':        # ACTIV-ES (Francom et al., 2014)
+            return corpus
+        if corpus.name == 'GINI':           # GINI: N/A
+            return None
+        return corpus / corpus.sum()
+
+    @staticmethod
+    def js_dist(
+        p: pd.Series, q: pd.Series, common: bool = False, top: int = None
+        ) -> float:
+        '''
+        Jensens-Shannon distance (natural log.-based between two corpus distributions
+        from StatData.distribution().
+        '''
+        if (p is None) or (q is None):
+            return np.nan
+        # Align the distributions:
+        pqz = pd.DataFrame({0: p, 1: q})
+        # Take common words or fill with zeros:
+        pqz = pqz.dropna() if common else pqz.fillna(0)
+        # Restrict to top n in either (i.e. <= 2*n items):
+        if top is not None:
+            ranks = [-r.argsort().argsort() for _, r in pqz.items()]
+            pqz = pqz.loc[
+                (ranks[0] < top) | (ranks[1] < top)
+                ]
+        (_, pz), (_, qz) = pqz.items()
+        return scipy.spatial.distance.jensenshannon(pz, qz)
+
+    @staticmethod
     def tokens(corpus: Any) -> Optional[int]:
         if isinstance(corpus, FrequencyData):
             return corpus.f_total
@@ -639,7 +687,7 @@ class StatData(NamedTuple):
         assert isinstance(corpus, pd.Series)
         if corpus.name == 'aes_orf':        # ACTIV-ES (Francom et al., 2014)
             return 3_897_234
-        if corpus.name == 'GINI':           # GINI: unknown
+        if corpus.name == 'GINI':           # GINI: N/A
             return None
         n = corpus.sum()
         assert n % 1 == 0
@@ -818,6 +866,33 @@ def do_stats(path_datasets: str, path_corpora: str,
             df_tok_y.to_csv(task_path)
 
 
+def do_cmp(path_cmp: str, languages: Optional[list[str]]):
+    lang2corpus2distr = defaultdict(dict)
+    for corpus_name, stat_data in tqdm(iterable=STATS_CORPORA.items(),
+                                       desc='Getting corpus distributions'):
+        for lang, data in stat_data.data(languages).items():
+            lang2corpus2distr[lang][corpus_name] = StatData.distribution(data)
+
+    for lang, corpus2distr in lang2corpus2distr.items():
+        ca2cb2dist = defaultdict(dict)
+        for c, p in tqdm(iterable=corpus2distr.items(),
+                         desc=f'Computing corpus distances for {lang}'):
+            if p is None:
+                continue
+            for d, q in corpus2distr.items():
+                if q is None:
+                    continue
+                if c == d:
+                    ca2cb2dist[c][d] = 0
+                    break   # only do one triangle
+                dpq = StatData.js_dist(p, q, top=1000)
+                ca2cb2dist[c][d] = dpq
+                ca2cb2dist[d][c] = dpq
+                print(lang, c, d, ca2cb2dist[c][d])
+        lang_path = path_cmp.replace('.csv', f'-{lang}.csv')
+        pd.DataFrame(ca2cb2dist).to_csv(lang_path)
+
+
 def main(args: argparse.Namespace) -> None:
     # Input data:
     mlsp_subsets = args.mlsp
@@ -845,6 +920,9 @@ def main(args: argparse.Namespace) -> None:
                  path_size_coverage=args.stats_size_coverage,
                  path_size_correlation=args.stats_size_correlation
                  )
+        return
+    if args.cmp:
+        do_cmp(path_cmp=args.cmp_corpora, languages=args.cmp_languages)
         return
 
     if args.log_lookups is not None:

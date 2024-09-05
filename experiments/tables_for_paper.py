@@ -236,7 +236,7 @@ def alternate_row_bg(df: pd.DataFrame | pd.Series):
 
 STAT_COL2DESC = {
     'videos_all': 'Videos:Found',
-    'files_valid': 'Videos:Valid',
+    'files_valid': 'Videos:Cleaned',
     'dedup_valid': 'Videos:Unique',
     'default:tokens': 'Tokens:'
     }
