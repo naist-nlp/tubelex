@@ -29,7 +29,7 @@ from vtt import VTTCleaner, sub_space
 import hkust_mtsc
 from unicodedata import normalize as unicode_normalize
 import pysbd
-
+import pysbd_indonesian
 # We use the smaller model from
 # https://fasttext.cc/docs/en/language-identification.html
 FT_LID_MODEL_PATH = 'lid.176.ftz'
@@ -1218,8 +1218,7 @@ def do_tokenize(
     # verbose: bool
     ) -> None:
 
-    # TODO: no sentence segmentation rules for Indonesian:
-    sseg = pysbd.Segmenter('en' if (lang == 'id') else lang).segment
+    sseg = pysbd.Segmenter(lang).segment
 
     tok_path: str  = path or (DEFAULT_TOK_PATH_FMT % identifier)
     assert '%' not in tok_path
