@@ -262,7 +262,7 @@ def main() -> None:
         s = Styler(
             props_by_lang,
             formatter=lambda x: rf'{x*100:.2f}\%',
-            na_rep='---'
+            na_rep=r'---\phantom{\%}'
             )
         tex = colapse_latex_table_header(s.to_latex(
             hrules=True

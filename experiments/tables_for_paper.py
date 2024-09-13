@@ -26,9 +26,9 @@ GROUP2NAME = {
     4: r'top ST'
     }
 
-GROUP2NAME_SMALL = {    # TODO now unnecessary DELETEME
-    0: r'\scriptsize speech',
-    1: r'film/TV subtitles',
+GROUP2NAME_SMALL = {
+    0: r'speech',
+    1: r'\vphantom{l}\textsmaller{film/TV subtitles}',
     2: r'other',
     3: r'our\vphantom{l}',    # alignment with previous group names after rotation
     4: r'top ST'
@@ -95,6 +95,12 @@ def add_group_level(
 
 def kill_extra_cline(tex: str) -> str:
     return re.sub(r'\\cline{[0-9-]+}\n\\bottomrule\n', r'\\bottomrule\n', tex)
+
+
+def cline2hline(tex: str) -> str:
+    # intended only for full width clines!
+    # hlines look better in tables with background
+    return re.sub(r'\\cline{[0-9-]+}\n', r'\\hline\n', tex)
 
 
 def p_value2prop(p):
@@ -258,10 +264,11 @@ def main():
                 f'experiments/{results_id}-corr-aggregate-correlation.tsv'),
                 index_col=0, header=tsv_header
                 )),
-            name=('Corpus / ST System' if results_metric else 'Corpus')
+            name=('Corpus / ST System' if results_metric else 'Corpus'),
+            small=(results_id == 'ldt')
             )
 
-        s = Styler(r, precision=RESULT_PREC, na_rep='---')
+        s = Styler(r, precision=RESULT_PREC, na_rep='{---}')
 
         r_not_na = ~r.isna()
         s = background_gradient(
@@ -275,17 +282,28 @@ def main():
                 index_col=0, header=tsv_header
                 )))
             s = add_p_stars(s, p)           # TODO: add pad if we add a mean column?
-        s = highlight_extreme(
-            s, props='textbf:--latex--rwrap;', op=best
-            )  # Inside p_stars
-        col_fmt = 'l' * s.data.index.nlevels + ('c') * len(s.data.columns)
+            col_fmt = 'l' * s.data.index.nlevels + ('c') * len(s.data.columns)
+            s = highlight_extreme(
+                s, props='mathbf:--latex--rwrap;', op=best
+                )  # Inside p_stars (math mode)
+        else:
+            col_fmt = (
+                'l' * s.data.index.nlevels +
+                ('S[table-format=-1.3]') * len(s.data.columns)
+                )
+            s = highlight_extreme(
+                s, props='bfseries:--latex--nowrap;', op=best
+                )  # Inside p_stars
+
         tex = kill_extra_cline(s.to_latex(
             hrules=True,
             clines='skip-last;data',
             column_format=col_fmt,
+            siunitx=True,
             convert_css=True  # for background_gradient
             ))
         tex = colapse_latex_table_header(tex, r)
+        tex = cline2hline(tex)
 
         latex_id = results_id.replace('-', '_')
         latex_name = latex_id + (
@@ -316,7 +334,7 @@ def main():
         else:
             stats.rename_axis(('Corpus', None), inplace=True)
 
-        s = Styler(stats, precision=STAT_PREC, thousands=',', na_rep='---')
+        s = Styler(stats, precision=STAT_PREC, thousands=',', na_rep='{---}')
 
         if stats_id == 'stats-corpora':
             s = s.apply(alternate_row_bg, axis=None)
@@ -347,7 +365,7 @@ def main():
         [col_levels[0], col_levels[2]], names=None
         )
 
-    s = Styler(stats, precision=STAT_PREC, thousands=',', na_rep='---')
+    s = Styler(stats, precision=STAT_PREC, thousands=',', na_rep='{---}')
     col_fmt = 'l' * s.data.index.nlevels + ('r') * len(s.data.columns)
     tex = s.to_latex(
         hrules=True,
