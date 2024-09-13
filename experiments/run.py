@@ -29,7 +29,6 @@ sys.path.append(os.path.join(os.path.dirname(__file__), os.pardir))
 from tubelex import add_tokenizer_arg_group, get_tokenizers, nfkc_lower
 from lang_utils import get_re_split
 
-
 LANG2FULL_NAME: dict[str, str] = {
     'en': 'English',
     'ca': 'Catalan',
@@ -168,13 +167,27 @@ def get_ldt_data(language: str, prefer_zscore: bool = False) -> pd.Series:
     return series
 
 
+WLSP2COL = {
+    'know': '知っている',
+    'read': '読む',
+    'speak': '話す',
+    'listen': '聞く',
+    'production': '生産',
+    'reception': '受容',
+    'writing': '書記',
+    'speech': '音声',
+    'production-reception': '生産-受容',
+    'writing-speech': '書記-音声'
+    }
+
 def get_familiarity_data(
     # IMPORTANT: STATS_DATASETS depends on the number/order of arguments!
     language: str,
     glasgow: bool = False,
     clark_paivio: bool = False,
     moreno_martinez: bool = False,
-    amano: bool = False
+    amano: bool = False,
+    wlsp: Optional[str] = None # 'reception' (default) or any of WLSP2COL
     # IMPORTANT: STATS_DATASETS depends on the number/order of arguments!
     ) -> pd.Series:
     if language == 'zh':
@@ -228,6 +241,7 @@ def get_familiarity_data(
             df['Word'] = df['Word'].str.strip()   # strip spaces
             series = df.set_index('Word')[fam_col]
     elif language == 'ja':
+        assert not (wlsp and amano)
         if amano:
             fam_col = '文字単語親密度'
             df = pd.read_csv('data/amano-kondo-1999-ntt/単語親密度.csv')
@@ -239,7 +253,7 @@ def get_familiarity_data(
             series = df.set_index('表記').groupby(level=0)[fam_col].mean()
         else:
             # Larger and more recent WLSP:
-            fam_col = '知っている'
+            fam_col = WLSP2COL[wlsp or 'reception']
             download_if_necessary(
                 'https://github.com/masayu-a/WLSP-familiarity/raw/4.0/bunruidb-fam.csv',
                 'data/downloads/bunruidb-fam.csv'
@@ -502,6 +516,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         '--amano', action='store_true',
         help='Use the Heisei NTT DB (Amano and Kondo, 1999) for Japanese familiarity.'
+        )
+    parser.add_argument(
+        '--wlsp', choices=WLSP2COL, help=(
+            'Use a specific WLSP (Asahara, 2019) value for Japanese familiarity. '
+            'Default: "reception".'
+            )
         )
     parser.add_argument(
         '--zscore', '-z', action='store_true',
@@ -1194,7 +1214,8 @@ def main(args: argparse.Namespace) -> None:
                     glasgow=args.glasgow,
                     clark_paivio=args.clark_paivio,
                     moreno_martinez=args.moreno_martinez,
-                    amano=args.amano
+                    amano=args.amano,
+                    wlsp=args.wlsp
                     )
                 )
             (
@@ -1255,6 +1276,8 @@ def main(args: argparse.Namespace) -> None:
                         cache_name += '.moreno_martinez'
                     if args.amano:
                         cache_name += '.amano'
+                    if args.wlsp:
+                        cache_name += f'.wlsp_{args.wlsp}'
                 cache_path = os.path.join(tubelex_cache_dir, cache_name + '.npy')
 
                 if cache_tubelex:
