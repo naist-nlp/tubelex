@@ -3,13 +3,14 @@ import os
 import sys
 from collections.abc import Iterator, Iterable, Callable
 from typing import Optional
-from collections import Counter
+from collections import Counter, defaultdict
 from collections.abc import Container
 from urllib.request import urlretrieve
 from contextlib import contextmanager
 from zipfile import ZipFile
 from itertools import chain, groupby, compress, islice
 import argparse
+import json
 from os.path import splitext
 from tqdm import tqdm  # type: ignore
 import numpy as np
@@ -18,7 +19,8 @@ from sklearn.feature_extraction.text import TfidfVectorizer  # type: ignore
 from sklearn.metrics.pairwise import linear_kernel  # type: ignore
 import fasttext  # type: ignore
 from lang_utils import (
-    get_re_word_relaxed, get_re_split,
+    match_relaxed_word, iter_tokenize_word_num,
+    iter_tokenized_replace_num, iter_tagged_replace_num,
     add_tagger_arg_group, tagger_from_args,
     OPT_BASE_LEMMA_READING_POS, POSTagger,
     sub_smart_apos, repl_smart_apos,
@@ -26,10 +28,11 @@ from lang_utils import (
     )
 from freq_utils import Storage, WordCounterGroup
 from vtt import VTTCleaner, sub_space
+from replacer import Replacer
 import hkust_mtsc
 from unicodedata import normalize as unicode_normalize
 import pysbd
-import pysbd_indonesian
+import pysbd_indonesian    # Adds Indonesian support even if "unused" import
 # We use the smaller model from
 # https://fasttext.cc/docs/en/language-identification.html
 FT_LID_MODEL_PATH = 'lid.176.ftz'
@@ -61,7 +64,7 @@ SUBLIST_PATH_FMT = 'jtubespeech-subtitles/sub/%s/%s_sample.csv'
 DEFAULT_FREQ_PATH_FMT = 'tubelex-%s%%.tsv'
 DEFAULT_TOK_PATH_FMT = 'corpus/tokenized-%s.txt'
 DEFAULT_CHANNEL_STATS_PATH_FMT = 'tubelex-%s-channels.tsv'
-DEFAULT_REM_ADDR_PATH_FMT = 'tubelex-%s-removed-addresses.tsv'
+DEFAULT_REM_ADDR_PATH_FMT = 'tubelex-%s-removed-addresses.json'
 DEFAULT_MIN_VIDEOS = 0
 DEFAULT_MIN_CHANNELS = 0
 
@@ -71,35 +74,7 @@ Tokenizer = Callable[[str], list[str]]
 TokenizerTagger = Callable[[str], list[tuple[str, str]]]
 WordFilter = Callable[[str], bool]
 
-# The functions subn_yt_censored, subn_cc_desc and substitute patterns including
-# any surrounding spaces. They are meant to be used like this:
-# subn_*(' ', s)
-
-YT_CENSORED             = '[ __ ]'
-YT_CENSORED_POS         = 'CENSORED'
 NA_POS                  = 'N/A'
-CC_PLACEHOLDER  = 'CCTUBELEXPLACEHOLDER'
-CC_PLACEHOLDER_SPC  = ' CCTUBELEXPLACEHOLDER '
-subn_yt_censored        = re.compile(rf'\s+{re.escape(YT_CENSORED)}\s+').subn
-subn_cc_placeholder     = re.compile(rf'\b{CC_PLACEHOLDER}\b').subn
-
-RE_CC_DESC      = r'\[(?=[^\[\]]*[\w♪～])[^\[\].?!．。？！]+\]'
-RE_CC_DESC_FW   = r'【(?=[^【】]*[\w♪～])[^【】.?!．。？！]+】'
-PAT_CC_DESC     = re.compile(
-    # May be either:
-    # - "[X]" or "【X】", where X doesn't contain the respective type of brackets,
-    #   and contains at least one word-forming character, "♪" or "～".
-    rf'\s*({re.escape(YT_CENSORED)}|{RE_CC_DESC}|{RE_CC_DESC_FW})\s*'
-    )
-subn_cc_desc = PAT_CC_DESC.subn
-
-NORMALIZE_CC: dict[int, int] = {
-    0x20: 0x005F,  # space to underscore
-    0x09: 0x005F,  # tab to underscore
-    # 【】 to []:
-    0x3010: 0x005B,
-    0x3011: 0x005D
-    }
 
 
 CAT_ID2CATEGORY = {
@@ -272,7 +247,7 @@ def add_tokenizer_arg_group(
         )
     group.add_argument(
         '--no-filter-tokens', action='store_false', dest='filter_tokens', help=(
-            'Do not filter tokens.'
+            'Do not filter tokens, do not replace numbers. (Does not apply to regex.)'
             )
         )
     add_tagger_arg_group(group)
@@ -393,7 +368,7 @@ def parse() -> argparse.Namespace:
         )
     parser.add_argument(
         '--removed-addresses', type=str, default=None,
-        help='Output filename for removed addresses (during cleanup)'
+        help='Output filename for removed addresses.'
         )
     parser.add_argument(
         '--verbose', '-v', action='store_true', help=(
@@ -477,92 +452,6 @@ def invalid_tag_subn_verbose(repl: str, s: str) -> tuple[int, str]:
     return (t, n)
 
 
-# HTTP(S)URLs and INFORMAL WEB ADDRESSES
-#
-# Accept most IDNA domain names/internationalized URL:
-
-# 1. Common (not all) TLDs:
-# Note: We accept either all upper case or all lower case, to avoid false positives,
-# e.g. "sentence ends.It starts another sentence"
-RE_TLD = (
-    r'(?:'
-    # common longer/non-country TLDs:
-    r'com|net|org|info|xyz|biz|online|club|pro|'
-    r'site|shop|store|tech|dev|gov|edu|mil|org|'
-    r'COM|NET|ORG|INFO|XYZ|BIZ|ONLINE|CLUB|PRO|'
-    r'SITE|SHOP|STORE|TECH|DEV|GOV|EDU|MIL|ORG|'
-    # common 2-letter/country TLDs:
-    r'ac|ad|ae|af|ag|ai|al|am|ao|ar|as|at|au|az|ba|bd|be|bf|bg|bh|'
-    r'bn|bo|br|bt|bw|by|bz|ca|cc|cd|cf|ch|ci|cl|cm|cn|co|cr|cu|cx|'
-    r'cy|cz|de|dk|do|dz|ec|ee|eg|es|et|eu|fi|fj|fm|fr|ga|ge|gg|gh|'
-    r'gl|gq|gr|gs|gt|hk|hn|hr|hu|id|ie|il|im|in|io|iq|ir|is|it|jm|'
-    r'jo|jp|ke|kg|kh|ki|kr|kw|ky|kz|la|lb|li|lk|lt|lu|lv|ly|ma|md|'
-    r'me|mg|mk|ml|mm|mn|mo|mr|ms|mt|mu|mv|mx|my|mz|na|nc|nf|ng|ni|'
-    r'nl|no|np|nu|nz|om|pa|pe|pf|ph|pk|pl|pm|ps|pt|pw|py|qa|re|ro|'
-    r'rs|ru|rw|sa|sc|sd|se|sg|sh|si|sk|sn|so|st|su|sv|sx|sy|tc|th|'
-    r'tj|tk|tm|tn|to|tr|tt|tv|tw|tz|ua|ug|uk|us|uy|uz|vc|ve|vg|vn|'
-    r'ws|za|zm|zw|'
-    r'AC|AD|AE|AF|AG|AI|AL|AM|AO|AR|AS|AT|AU|AZ|BA|BD|BE|BF|BG|BH|'
-    r'BN|BO|BR|BT|BW|BY|BZ|CA|CC|CD|CF|CH|CI|CL|CM|CN|CO|CR|CU|CX|'
-    r'CY|CZ|DE|DK|DO|DZ|EC|EE|EG|ES|ET|EU|FI|FJ|FM|FR|GA|GE|GG|GH|'
-    r'GL|GQ|GR|GS|GT|HK|HN|HR|HU|ID|IE|IL|IM|IN|IO|IQ|IR|IS|IT|JM|'
-    r'JO|JP|KE|KG|KH|KI|KR|KW|KY|KZ|LA|LB|LI|LK|LT|LU|LV|LY|MA|MD|'
-    r'ME|MG|MK|ML|MM|MN|MO|MR|MS|MT|MU|MV|MX|MY|MZ|NA|NC|NF|NG|NI|'
-    r'NL|NO|NP|NU|NZ|OM|PA|PE|PF|PH|PK|PL|PM|PS|PT|PW|PY|QA|RE|RO|'
-    r'RS|RU|RW|SA|SC|SD|SE|SG|SH|SI|SK|SN|SO|ST|SU|SV|SX|SY|TC|TH|'
-    r'TJ|TK|TM|TN|TO|TR|TT|TV|TW|TZ|UA|UG|UK|US|UY|UZ|VC|VE|VG|VN|'
-    r'WS|ZA|ZM|ZW'
-    # ensure it's not followed by other \w characters:
-    r')\b'
-    )
-
-# 2. Host names (without TLD):
-# - can contain letter, digit, hyphen (not underscore),
-# - cannot start or end with a hyphen
-# \w (perfectly?) matches characters allowed by IDNA allowing different alphabets,
-# accents, digits (\W is the negation of \w)
-
-RE_HOST = r'(?!-)(?:[^\W_]|-)+(?<!-)'
-
-# 3. Domain name + optional port (no underscores, although allowed in subdomains):
-# e.g. apple.com, www.google.com, go.to, WITH PORT: én.wik-pédi4.com:8080
-
-RE_DOMAIN = rf'(?:{RE_HOST}\.)+{RE_TLD}'
-RE_DOMAIN_PORT = rf'{RE_DOMAIN}(?::[0-9]+)?'
-
-# 4. Simplified (int'l) paths:
-# - Do not allow "'()[]", although legal in URL.
-# - Do not allow trailing punctuation .!?,;:, although legal in URL.
-
-RE_PATH = (
-    r'/(?:'                     # leading slash followed by any number of
-    r'[\w/!*;:@&=+$,/?#.~-]|'   # - allowed characters allowing int'l (\w)
-    r'(?:%[0-9a-fA-F]{2})'      # - hex escapes
-    r')*'
-    r'(?<![.!?,;:])'
-    )
-
-# 5. URL: HTTP(S) URL with optional port, or URL without protocol and port,
-# e.g.
-# https://x.com/username,
-# x.com/username
-# https://www.google.com:443/search?q=term
-
-RE_URL = (
-    rf'(?:https?://{RE_DOMAIN_PORT}|{RE_DOMAIN})(?:{RE_PATH})?'
-    )
-
-RE_EMAIL = rf'[a-zA-Z0-9_.+-]+@{RE_DOMAIN}'
-
-# Now handled by RE_URL:
-# RE_WWW = r'www.[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+'
-
-# Social network handles generally don't start with . and don't contain consecutive .
-RE_HANDLE = r'@(?:[a-zA-Z0-9_.]+)*[a-zA-Z0-9_]+'
-PAT_ADDRESS = re.compile(
-    r'|'.join((RE_URL, RE_EMAIL, RE_HANDLE))
-    )
-
 PAT_NEWLINES = re.compile(r'\n+')
 
 
@@ -577,12 +466,10 @@ def convert_newlines_for_tokenization(s: str) -> str:
 class SubCleaner(VTTCleaner):
     pat_seq: re.Pattern
     n_removed_tags: int
-    n_removed_addresses: int
     n_lines_empty: int
     n_lines_nonl: int
     n_chars: int
     n_chars_l: int
-    removed_addresses: list[str]
 
     '''
     Clean and filter lines via the __call__ method. Counts (instance variables) reflect
@@ -594,17 +481,11 @@ class SubCleaner(VTTCleaner):
         super().__init__(verbose=verbose)
         self.pat_seq = LANG2PAT_SEQ.get(lang, PAT_LATIN_SEQ)
 
-    def _repl_address(self, m: re.Match) -> str:
-        self.removed_addresses.append(m.group())
-        return ''
-
     def _extra_cleanup(
         self, lines: Iterable[str], delays_as_empty: bool = True
         ) -> Iterator[str]:
         n_removed_tags          = 0
-        n_removed_addresses     = 0
         n_lines_empty           = 0
-        self.removed_addresses  = []
         tag_subn = (
             invalid_tag_subn_verbose if self.verbose else
             invalid_tag_subn
@@ -616,18 +497,14 @@ class SubCleaner(VTTCleaner):
                 continue
             # Remove formatting tags:
             line, n_tags = tag_subn('', line)
-            # Replace addresses with space for better tokenization:
-            line, n_addresses = PAT_ADDRESS.subn(self._repl_address, line)
             # Re-normalize whitespace:
             line = sub_space(' ', line)
             n_removed_tags += n_tags
-            n_removed_addresses += n_addresses
             if not line or line == ' ':
                 n_lines_empty += 1
                 continue            # ignore empty line
             yield line
         self.n_removed_tags = n_removed_tags
-        self.n_removed_addresses = n_removed_addresses
         self.n_lines_empty = n_lines_empty
 
     def __call__(
@@ -637,12 +514,10 @@ class SubCleaner(VTTCleaner):
         # (safety measure)
         if hasattr(self, 'n_removed_tags'):
             del self.n_removed_tags
-            del self.n_removed_addresses
             del self.n_lines_empty
             del self.n_lines_nonl
             del self.n_chars
             del self.n_chars_l
-            del self.removed_addresses
 
         n_lines_nonl = 0
         n_chars = 0
@@ -757,7 +632,6 @@ def do_clean(
     storage: Storage,
     sublist: pd.DataFrame,  # for filtering files
     data_path: str,
-    removed_addresses_path: Optional[str],
     limit: Optional[int],
     verbose: bool
     ) -> None:
@@ -780,7 +654,6 @@ def do_clean(
     n_lid   = 0
     n_valid = 0
     n_valid_removed_tags = 0
-    n_valid_removed_addresses = 0
     n_valid_lines_empty = 0
     n_valid_lines_nonl = 0
     n_valid_lines_valid = 0
@@ -788,8 +661,6 @@ def do_clean(
     vtt_n_empty = 0
     vtt_n_repeat = 0
     vtt_n_scroll = 0
-    removed_addresses = []
-    removed_addresses_videoids = []
 
     cleaner = SubCleaner(lang, verbose=verbose)
 
@@ -798,7 +669,6 @@ def do_clean(
             desc='Cleaning',
             iterable=dfs
             ):
-            videoid = splitext(file)[0]
             # clean each line, and remove repeated or empty lines
             with open(os.path.join(directory, file)) as f:
                 lines = list(cleaner(f))
@@ -850,7 +720,6 @@ def do_clean(
                 continue
 
             n_valid_removed_tags        += cleaner.n_removed_tags
-            n_valid_removed_addresses   += cleaner.n_removed_addresses
             n_valid_lines_empty         += cleaner.n_lines_empty
             n_valid_lines_nonl          += cleaner.n_lines_nonl
             n_valid_lines_valid         += n_lines
@@ -858,8 +727,6 @@ def do_clean(
             vtt_n_empty                 += cleaner.n_empty
             vtt_n_repeat                += cleaner.n_repeat
             vtt_n_scroll                += cleaner.n_scroll
-            removed_addresses           += cleaner.removed_addresses
-            removed_addresses_videoids  += [videoid] * len(cleaner.removed_addresses)
 
             text = '\n'.join(chain(lines, ('',)))   # adds trailing \n
             out_file = file.removesuffix(SUB_SUFFIX) + DATA_SUFFIX
@@ -882,7 +749,6 @@ def do_clean(
     print(f'  {n_valid} valid files after cleaning')
     print('* sequences removed from valid files:')
     print(f'  {n_valid_removed_tags} tags')
-    print(f'  {n_valid_removed_addresses} addresses')
     print('* lines in valid files:')
     print(f'  {n_valid_lines_total} total lines')
     print(f'  {n_valid_lines_empty} whitespace-only lines')
@@ -894,14 +760,6 @@ def do_clean(
     print(f'  {vtt_n_repeat} repeated cues')
     print(f'  {vtt_n_scroll} scrolling cues')
     print()
-
-    pd.DataFrame({
-        'video_id': removed_addresses_videoids,
-        'removed_address': removed_addresses
-        }).to_csv(
-            removed_addresses_path or (DEFAULT_REM_ADDR_PATH_FMT % lang),
-            sep='\t', index=False
-            )
 
 
 def do_unique(
@@ -1042,6 +900,7 @@ def do_frequencies(
     limit: Optional[int],
     path: Optional[str],
     channel_stats_path: Optional[str],
+    removed_addresses_path: Optional[str],
     min_videos: int,
     min_channels: int,
     verbose: bool,
@@ -1092,7 +951,8 @@ def do_frequencies(
         pos=(pos_tag is not None),
         categories=categories
         )
-    n_cc_descriptions = 0
+    replaced_counter = Counter()
+    removed_addresses = defaultdict(list)
 
     with get_files_contents(
         tokenized_files or (UNIQUE_PATH_FMT % identifier),
@@ -1109,6 +969,7 @@ def do_frequencies(
             iterable=enumerate(zip(files[:limit], iter_contents(limit))),
             total=n_videos
             ):
+            replacer = Replacer(replaced_counter, removed_addresses)
             video_id = file.removesuffix(DATA_SUFFIX)
 
             # Videos without a channel id are counted as unique 1-video channels:
@@ -1125,19 +986,8 @@ def do_frequencies(
             if tokenized_files is None:
                 # Normalize tilde: always AND before tokenization:
                 text = text.translate(NORMALIZE_FULLWIDTH_TILDE)
-
-                # Remove and count censored words (included in frequencies)
-                text, n = subn_yt_censored(' ', text)
-                if tokenize is not None:
-                    counters.add([YT_CENSORED] * n, channel_id, cat_id)
-                else:
-                    counters.add_pos([(YT_CENSORED, YT_CENSORED_POS)] * n,
-                                     channel_id, cat_id)
-
-                if filter_cc_descriptions:
-                    # Remove and count CC descriptions
-                    text, n = subn_cc_desc(' ', text)
-                    n_cc_descriptions += n
+                # Replace PII and CC descriptions:
+                text = replacer.replace_with_placeholders(text)
             elif laborotv:
                 for line in text.split('\n'):
                     if not line:
@@ -1154,7 +1004,8 @@ def do_frequencies(
                 text = hkust_mtsc.process(text)
 
             if tokenize is not None:
-                words = tokenize(text)
+                tokenized_or_tagged = list(tokenize(text))   # TODO already list?
+                words = replacer.replace_in_tokens(tokenized_or_tagged, retry=True)
                 counters.add(words, channel_id, cat_id)
                 if verbose:
                     print(f'{file}:')
@@ -1162,13 +1013,23 @@ def do_frequencies(
                         print(w)
                     print()
             else:
-                words_pos = pos_tag(text)
+                tokenized_or_tagged = list(pos_tag(text))   # TODO already list?
+                words_pos = replacer.replace_in_tagged(tokenized_or_tagged, retry=True)
                 counters.add_pos(words_pos, channel_id, cat_id)
                 if verbose:
                     print(f'{file}:')
                     for w, p in words_pos:
                         print(f'{w}\t{p}')
                     print()
+
+            if not replacer.all_placeholders_replaced():
+                raise Exception(
+                    f'{video_id}: Could replace only {replacer.out_idx} out of '
+                    f'{len(replacer.out_tokens)} placeholders.\n'
+                    f'- tokens: {replacer.out_tokens}\n'
+                    f'- addresses: {replacer.addresses}\n\n'
+                    f'{tokenized_or_tagged}\n'
+                    )
 
             counters.close_doc()
 
@@ -1191,10 +1052,14 @@ def do_frequencies(
         n_channels=n_channels_and_no_channels
         )
 
+    with open(removed_addresses_path or (DEFAULT_REM_ADDR_PATH_FMT % lang), 'w') as fra:
+        json.dump(removed_addresses, fra)
+
     print('Frequency counting stats:')
-    if filter_cc_descriptions and not tokenized_files:
-        print(f' {n_cc_descriptions} CC descriptions filtered')
     print(f' {counters.n_words} tokens counted')
+    for name, n in replaced_counter.items():
+        print(f' {n} replacements for <{name}>')
+
     print()
 
     counters.warnings_for_markup()
@@ -1204,18 +1069,11 @@ def do_tokenize(
     lang: str,
     identifier: str,
     storage: Storage,
-    # sublist: Optional[pd.DataFrame],   # for channel ids or categories
     tokenized_files: Optional[str],
     tokenize: Tokenizer,
-    # categories: bool,
-    # pos_tag: Optional[TokenizerTagger],
-    # filter_cc_descriptions: bool,
     limit: Optional[int],
     path: Optional[str],
-    # channel_stats_path: Optional[str],
-    # min_videos: int,
-    # min_channels: int,
-    # verbose: bool
+    removed_addresses_path: Optional[str]
     ) -> None:
 
     sseg = pysbd.Segmenter(lang).segment
@@ -1225,21 +1083,8 @@ def do_tokenize(
 
     assert tokenize is not None
 
-    ccs = []
-    cci = 0
-    ccn = 0
-
-    def repl_cc_placeholder(m: re.Match) -> str:
-        nonlocal ccs
-        ccs.append(m.group(1).translate(NORMALIZE_CC))
-        return CC_PLACEHOLDER_SPC
-
-    def repl_placeholder_cc(m: re.Match) -> str:
-        nonlocal ccs, cci, ccn
-        assert cci < ccn
-        cc = ccs[cci]
-        cci += 1
-        return cc
+    replaced_counter = Counter()
+    removed_addresses = defaultdict(list)
 
     with open(tok_path, 'w') as fo:
         with get_files_contents(
@@ -1250,31 +1095,38 @@ def do_tokenize(
             files, iter_contents = files_contents
             n_videos = len(files[:limit])
             assert n_videos, 'Something went wrong, no subtitles found.'
-            for text in tqdm(
+            for file, text in tqdm(
                 desc='Tokenizing',
-                iterable=iter_contents(limit),
+                iterable=zip(files[:limit], iter_contents(limit)),
                 total=n_videos
                 ):
-                ccs = []
-                cci = 0
-                ccn = 0
                 if not tokenized_files:
                     # Normalize tilde: always AND before tokenization:
                     text = text.translate(NORMALIZE_FULLWIDTH_TILDE)
 
-                    # Normalize CC and censored words
-                    text, ccn = subn_cc_desc(repl_cc_placeholder, text)
+                    # Replace PII and CC descriptions:
+                    replacer = Replacer(replaced_counter, removed_addresses)
+                    text = replacer.replace_with_placeholders(text)
 
                 sentences = sseg(convert_newlines_for_tokenization(text))
 
                 tokenized = '\n'.join(' '.join(tokenize(s)) for s in sentences) + '\n'
+                if not tokenized_files:
+                    text = replacer.replace_placeholders_with_tokens(text, retry=True)
 
-                if ccn:
-                    # TODO DEBUGME print('CC', ccs)
-                    tokenized, phn = subn_cc_placeholder(repl_placeholder_cc, tokenized)
-                    # TODO DEBUGME assert phn == ccn
+                    if not replacer.all_placeholders_replaced():
+                        video_id = file.removesuffix(DATA_SUFFIX)
+                        raise Exception(
+                            f'{video_id}: Could replace only {replacer.out_idx} out of '
+                            f'{len(replacer.out_tokens)} placeholders.\n'
+                            f'- tokens: {replacer.out_tokens}\n'
+                            f'- addresses: {replacer.addresses}\n'
+                            )
 
                 fo.write(nfkc_lower(tokenized))
+
+    with open(removed_addresses_path or (DEFAULT_REM_ADDR_PATH_FMT % lang), 'w') as fra:
+        json.dump(removed_addresses, fra)
 
 
 def get_stanza_tokenizers(
@@ -1415,14 +1267,14 @@ def get_tokenizers(
 
                 def pos_tag(s: str) -> list[tuple[str, str]]:
                     # Jieba returns a generator of `pair` objects => convert
-                    return list(map(tuple, jieba_posseg_cut(s)))
+                    return map(tuple, jieba_posseg_cut(s))
             else:
                 tokenize = surface_tokenize  # lemma = base = surface
     elif lang == 'en':
         en_tokenize: Optional[Tokenizer] = None
         en_pos_tag: Optional[TokenizerTagger] = None
         if tokenization == 'regex':
-            en_surface_tokenize = get_re_split().split
+            en_surface_tokenize = iter_tokenize_word_num
             if full:
                 if args.pos:
                     raise Exception('Cannot tag POS with regex tokenizer.')
@@ -1476,7 +1328,7 @@ def get_tokenizers(
         if tokenization == 'treebank':
             raise Exception('Cannot use treebank tokenization with language {lang}.')
         if tokenization == 'regex':
-            surface_tokenize = get_re_split().split
+            surface_tokenize = iter_tokenize_word_num
             if full:
                 if args.pos:
                     raise Exception('Cannot tag POS with regex tokenizer.')
@@ -1491,22 +1343,35 @@ def get_tokenizers(
         assert not ((tokenize is not None) and (pos_tag is not None))
         return (surface_tokenize, tokenize, pos_tag)
 
-    re_word = get_re_word_relaxed()
-    is_word = re_word.match if (re_word is not None) else None
+    if tokenization == 'regex':
+        is_word     = None  # The words already "pass" match_word_num
+        assert not (full and args.pos)
+
+        def tok_repl(ts: Iterable[str]) -> Iterable[str]:
+            return ts
+
+    else:
+        is_word     = match_relaxed_word
+        tok_repl    = iter_tokenized_replace_num
+        tagged_repl = iter_tagged_replace_num
+
+    # TODO typing is slightly off: the tokenizers above CAN be generators/iterators
+    # Here we turn them into functions returning lists:
 
     f_tokenize: Optional[Tokenizer] = None
     f_pos_tag: Optional[TokenizerTagger] = None
 
     def f_surface_tokenize(s: str) -> list[str]:
-        return list(filter(is_word, surface_tokenize(s)))
+        return list(filter(is_word, tok_repl(surface_tokenize(s))))
 
     if full:
         if args.pos:
             def f_pos_tag(s: str) -> list[str]:
-                return list(filter(lambda token_pos: is_word(token_pos[0]), pos_tag(s)))
+                return list(filter(lambda token_pos: is_word(token_pos[0]),
+                                   tagged_repl(pos_tag(s))))
         else:
             def f_tokenize(s: str) -> list[str]:
-                return list(filter(is_word, tokenize(s)))
+                return list(filter(is_word, tok_repl(tokenize(s))))
 
     return (f_surface_tokenize, f_tokenize, f_pos_tag)
 
@@ -1518,7 +1383,6 @@ def main() -> None:
     clean = args.clean
     unique = args.unique
     frequencies = args.frequencies
-    # args.tokenize
     with_pos = args.pos
     categories = args.categories
     tokenized_files = args.tokenized_files
@@ -1598,7 +1462,6 @@ def main() -> None:
             storage,
             sublist,
             data_path,
-            removed_addresses_path=args.removed_addresses,
             limit=limit,
             verbose=args.verbose
             )
@@ -1644,10 +1507,11 @@ def main() -> None:
                 tokenize=tokenize,
                 categories=categories,
                 pos_tag=pos_tag,
-                filter_cc_descriptions=args.filter_cc_descriptions,
+                filter_cc_descriptions=args.filter_cc_descriptions,  # TODO TODO ignored
                 limit=limit,
                 path=args.output,
                 channel_stats_path=args.channel_stats,
+                removed_addresses_path=args.removed_addresses,
                 min_videos=args.min_videos,
                 min_channels=args.min_channels,
                 verbose=args.verbose
@@ -1663,7 +1527,8 @@ def main() -> None:
                 tokenized_files=tokenized_files,
                 tokenize=tokenize,
                 limit=limit,
-                path=args.output
+                path=args.output,
+                removed_addresses_path=args.removed_addresses
                 )
 
 

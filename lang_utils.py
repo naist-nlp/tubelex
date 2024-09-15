@@ -5,7 +5,7 @@ Language processing for `tubelex` and `wikipedia-word-frequency-clean`.
 import fugashi  # type: ignore
 import os
 from typing import Optional
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Iterable
 import argparse
 import re
 from extended_pos import (
@@ -15,8 +15,7 @@ from extended_pos import (
     )
 
 
-# Word matching (not just) for Japanese
-
+# Word matching for Japanese (not used in TUBELEX):
 
 def _assert_safe_for_re_range(s: str) -> None:
     '''
@@ -60,46 +59,148 @@ def get_re_word(
         )
 
 
-def get_re_word_relaxed() -> re.Pattern:
+# def get_re_word_relaxed() -> re.Pattern:
+#     '''
+#     All non-digit ([^\\d]), at least one word-forming ([\\w]) character.
+#     '''
+#     return re.compile(
+#         r'^([^\d]*(?!\d)[\w][^\d]*)$'
+#         )
+
+
+# Word matching used in TUBELEX:
+
+# \d in RE covers ASCII 0-9 and ０-９𝟎-𝟗𝟘-𝟡𝟢-𝟫𝟬-𝟵𝟶-𝟿 and digits in many other scripts
+# except Hanzi/Kanji digits, we add some more symbols based on arabic digits:
+WAVE_DASH               = '\u301C'
+EXTRA_CHARS             = f"[{WAVE_DASH}'-]"
+RE_DIGIT_RANGES         = r'\d⁰¹²³⁴⁵⁶⁷⁸⁹₀-₉①-⑳⓪⓵-⓽⓿❶-❾⑴-⒇⒈-⒛🄀'
+RE_WORD_NO_DIGIT        = rf'[^\W{RE_DIGIT_RANGES}]'  # \w and not digit
+RE_WORD_NO_DIGIT_WAVE   = rf'{RE_WORD_NO_DIGIT}|{WAVE_DASH}'
+RE_SINGLE_CHAR          = r"['-]"
+# RE_WORD_TOKEN is capturing:
+RE_WORD_TOKEN           = rf'((?:{RE_WORD_NO_DIGIT_WAVE})+|{RE_SINGLE_CHAR})'
+# RE_NUM_TOKEN is not => empty string in findall
+RE_NUM_TOKEN            = rf'[{RE_DIGIT_RANGES}]+'
+RE_WN_IN_TOKEN          = rf'{RE_WORD_TOKEN}|{RE_NUM_TOKEN}'
+RE_WN_OUT_TOKEN         = rf'{RE_WORD_TOKEN}|<num>'
+RE_RELAXED_W_TOKEN      = r'[^\d]*(?!\d)[\w{EXTRA_CHARS}][^\d]*'
+
+# Input tokenization:
+PAT_NUM_TOKEN       = re.compile(RE_NUM_TOKEN)
+num_split           = PAT_NUM_TOKEN.split
+PAT_WN_IN_TOKEN     = re.compile(RE_WN_IN_TOKEN)
+findall_word_num    = PAT_WN_IN_TOKEN.findall
+
+# Tokenized output:
+PAT_WN_OUT_TOKEN    = re.compile(RE_WN_OUT_TOKEN)
+PAT_RELAXED_W_TOKEN = re.compile(RE_RELAXED_W_TOKEN)
+match_word_num      = PAT_WN_OUT_TOKEN.fullmatch
+match_relaxed_word  = PAT_RELAXED_W_TOKEN.fullmatch
+
+
+NUM_TOKEN = '<num>'
+NUM_POS = 'NUM'
+NUM_TOKEN_POS = (NUM_TOKEN, NUM_POS)
+
+
+def iter_tokenize_word_num(s):
     '''
-    All non-digit ([^\\d]), at least one word-forming ([\\w]) character.
+    >>> ' '.join(tokenize_word_num("The court's a learning-place; and he is 1."))
+    "The court ' s a learning - place and he is <num>"
     '''
-    return re.compile(
-        r'^([^\d]*(?!\d)[\w][^\d]*)$'
-        )
+    return (w or NUM_TOKEN for w in findall_word_num(s))
 
 
-def get_re_split(no_split: str = '') -> re.Pattern:
+def iter_tokenized_replace_num(ts: Iterable[str]) -> Iterator[str]:
+    # Boundaries between items of ts are created by tokenization
+    in_num = False
+    for t in ts:
+        tns = num_split(t)
+        # Boundaries between items of tns (some if which may be empty) correspond to
+        # numbers. We coalesce adjacent numbers together.
+        if len(tns) <= 1:
+            in_num = False
+            yield t
+            continue
+        itns = iter(tns)
+        for tn in itns:
+            if tn:
+                yield tn
+                in_num = False
+            else:
+                if not in_num:
+                    yield NUM_TOKEN
+                    in_num = True
+            break
+        for tn in itns:
+            if not in_num:
+                yield NUM_TOKEN
+            if tn:
+                yield tn
+                in_num = False
+            else:
+                in_num = True
+
+
+def iter_tagged_replace_num(ts: Iterable[tuple[str, str]]) -> Iterator[tuple[str, str]]:
     '''
-    Match non-word sequences to split words. Such sequences may consist of:
-    - characters not in \\w or in `no_split`
-    - characters in \\d
-
-    For languages that can be segmented with a regex (not Chinese or Japanase).
-    Also see `get_re_word()`.
+    Version of iter_tokenized_replace_num for tagged sequences.
     '''
-    _assert_safe_for_re_range(no_split)
+    in_num = False
+    for t, pos in ts:
+        tns = num_split(t)
+        if len(tns) <= 1:
+            in_num = False
+            yield (t, pos)
+            continue
+        itns = iter(tns)
+        for tn in itns:
+            if tn:
+                yield (tn, pos)
+                in_num = False
+            else:
+                if not in_num:
+                    yield NUM_TOKEN_POS
+                    in_num = True
+            break
+        for tn in itns:
+            if not in_num:
+                yield NUM_TOKEN_POS
+            if tn:
+                yield (tn, pos)
+                in_num = False
+            else:
+                in_num = True
 
-    # We need a non-capturing group '(?:...)' for split() to use the whole regex
-    return re.compile(rf'(?:[^\w{no_split}]|\d)+')
 
-
-WAVE_DASH   = '\u301C'  # 〜 may look like fullwidth tilde ～
-EN_DASH     = '\u2013'  # – may look like hyphen -
-
-
-# Examples (test):
-_re_word = get_re_word()
-_re_split = get_re_split()
-assert all(_re_word.fullmatch(w) for w in ['a', '亀', 'コアラ', 'Pú', 'A/B', 'bla-bla'])
-assert not any(
-    _re_word.match(w) for w in ['', '1', 'a1', '1a', 'C3PIO', '/', '-', 'あ〜']
-    )
-assert get_re_word(allow_start_end=WAVE_DASH).match('あ〜')
-assert (
-    _re_split.split('a.b  cč5dď-eé\'ff1+2*3.5koala') ==
-    ['a', 'b', 'cč', 'dď', 'eé', 'ff', 'koala']
-    )
+# def get_re_split(no_split: str = '') -> re.Pattern:
+#     '''
+#     Match non-word sequences to split words. Such sequences may consist of:
+#     - characters not in \\w or in `no_split`
+#     - characters in \\d
+#
+#     For languages that can be segmented with a regex (not Chinese or Japanase).
+#     Also see `get_re_word()`.
+#     '''
+#     _assert_safe_for_re_range(no_split)
+#
+#     # We need a non-capturing group '(?:...)' for split() to use the whole regex
+#     return re.compile(rf'(?:[^\w{no_split}]|\d)+')
+#
+#
+# # Examples (test):
+# _re_word = get_re_word()
+# _re_split = get_re_split()
+# assert all(_re_word.fullmatch(w) for w in ['a', '亀', 'コアラ', 'Pú', 'A/B', 'bla-bla'])
+# assert not any(
+#     _re_word.match(w) for w in ['', '1', 'a1', '1a', 'C3PIO', '/', '-', 'あ〜']
+#     )
+# assert get_re_word(allow_start_end=WAVE_DASH).match('あ〜')
+# assert (
+#     _re_split.split('a.b  cč5dď-eé\'ff1+2*3.5koala') ==
+#     ['a', 'b', 'cč', 'dď', 'eé', 'ff', 'koala']
+#     )
 
 
 NORMALIZE_FULLWIDTH_TILDE: dict[int, int] = {
@@ -232,7 +333,7 @@ class POSTagger:
                     for m in PAT_PARTICLE_AUX.finditer(token_buffer):
                         if aux_tokens := m.group(AUX_GROUP):
                             yield (
-                                aux2base(aux_tokens) if self.ret_index!=0 else
+                                aux2base(aux_tokens) if self.ret_index != 0 else
                                 aux_tokens.replace(' ', ''),    # surface
                                 X_AUX_POS
                                 )
@@ -281,6 +382,7 @@ class POSTagger:
             return
         else:
             yield from iter_pos_tag
+
 
 # The right single quote '’' (but not the left single quote) is allowed to occur
 # inside ‘...’ as long as it is surrounded by \w from both sides (\b’\b in the RE).
