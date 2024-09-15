@@ -6,5 +6,7 @@
 #SBATCH --time=24:00:00
 #SBATCH -c4
 
-echo '--lemma --pos' 																			>> tubelex-en.out
-python tubelex.py --lang en -x --frequencies --form lemma --pos -o tubelex-en-lemma-pos%.tsv.xz >> tubelex-en.out
+DIR=frequencies
+
+echo '--lemma --pos' 																			>> ${DIR}/tubelex-en.out
+python tubelex.py --lang en -x --frequencies --form lemma --pos -o ${DIR}/tubelex-en-lemma-pos%.tsv.xz >> ${DIR}/tubelex-en.out

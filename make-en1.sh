@@ -6,5 +6,7 @@
 #SBATCH --time=24:00:00
 #SBATCH -c4
 
-echo '[stanza]'	>> tubelex-en.out
-python tubelex.py --lang en -x --frequencies -o tubelex-en%.tsv.xz >> tubelex-en.out
+DIR=frequencies
+
+echo '[stanza]'	>> ${DIR}/tubelex-en.out
+python tubelex.py --lang en -x --frequencies -o ${DIR}/tubelex-en%.tsv.xz >> ${DIR}/tubelex-en.out

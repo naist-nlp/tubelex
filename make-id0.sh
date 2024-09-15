@@ -5,6 +5,8 @@
 #SBATCH -p lang_short
 #SBATCH -c1
 
-python tubelex.py --lang id -x --clean --unique > tubelex-id.out
-echo '[regex]'																					    >> tubelex-id.out
-python tubelex.py --lang id --tokenization regex -x    --frequencies -o tubelex-id-regex%.tsv.xz	>> tubelex-id.out
+DIR=frequencies
+
+python tubelex.py --lang id -x --clean --unique > ${DIR}/tubelex-id.out
+echo '[regex]'																					    >> ${DIR}/tubelex-id.out
+python tubelex.py --lang id --tokenization regex -x    --frequencies -o ${DIR}/tubelex-id-regex%.tsv.xz	>> ${DIR}/tubelex-id.out

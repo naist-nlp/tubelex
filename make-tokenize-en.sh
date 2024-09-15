@@ -5,4 +5,4 @@
 #SBATCH -p lang_short
 #SBATCH -c1
 
-python tubelex.py --lang en --tokenization regex -x --tokenize
+python tubelex.py --lang en --tokenization regex -x --tokenize --removed-addresses corpus/tokenized-en-removed-addresses.json

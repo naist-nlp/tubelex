@@ -5,8 +5,8 @@ source config.sh	# Slack notifications - optional
 JOB_EN=$(sbatch --parsable make-en0.sh)
 JOB_ID=$(sbatch --parsable make-id0.sh)
 JOB_ES=$(sbatch --parsable make-es0.sh)
-sbatch make-zh.sh 
-sbatch make-ja.sh
+JOB_ZH=$(sbatch --parsable make-zh.sh)
+JOB_JA=$(sbatch --parsable make-ja.sh)
 
 sbatch -d afterok:$JOB_EN make-en1.sh
 sbatch -d afterok:$JOB_EN make-en1x.sh
@@ -15,11 +15,11 @@ sbatch -d afterok:$JOB_ID make-id1x.sh
 sbatch -d afterok:$JOB_ES make-es1.sh
 sbatch -d afterok:$JOB_ES make-es1x.sh
 
-sbatch make-tokenize-en.sh 
-sbatch make-tokenize-es.sh 
-sbatch make-tokenize-id.sh 
-sbatch make-tokenize-zh.sh 
-sbatch make-tokenize-ja.sh
+sbatch -d afterok:$JOB_EN make-tokenize-en.sh 
+sbatch -d afterok:$JOB_ES make-tokenize-es.sh 
+sbatch -d afterok:$JOB_ID make-tokenize-id.sh 
+sbatch -d afterok:$JOB_ZH make-tokenize-zh.sh 
+sbatch -d afterok:$JOB_JA make-tokenize-ja.sh
 
 # See README.md for the following:
 #

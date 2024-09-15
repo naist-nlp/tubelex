@@ -5,8 +5,10 @@
 #SBATCH -p lang_short
 #SBATCH -c1
 
-python tubelex.py --lang en -x --clean --unique > tubelex-en.out
-echo '[regex]'																					    >> tubelex-en.out
-python tubelex.py --lang en --tokenization regex -x    --frequencies -o tubelex-en-regex%.tsv.xz	>> tubelex-en.out
-echo '[treebank]'																				    >> tubelex-en.out
-python tubelex.py --lang en --tokenization treebank -x --frequencies -o tubelex-en-treebank%.tsv.xz	>> tubelex-en.out
+DIR=frequencies
+
+python tubelex.py --lang en -x --clean --unique > ${DIR}/tubelex-en.out
+echo '[regex]'																					    >> ${DIR}/tubelex-en.out
+python tubelex.py --lang en --tokenization regex -x    --frequencies -o ${DIR}/tubelex-en-regex%.tsv.xz	>> ${DIR}/tubelex-en.out
+echo '[treebank]'																				    >> ${DIR}/tubelex-en.out
+python tubelex.py --lang en --tokenization treebank -x --frequencies -o ${DIR}/tubelex-en-treebank%.tsv.xz	>> ${DIR}/tubelex-en.out
