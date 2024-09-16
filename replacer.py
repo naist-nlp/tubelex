@@ -1,5 +1,5 @@
 from collections import Counter, defaultdict
-from collections.abc import Iterable, Iterator, Callable, Sequence
+from collections.abc import Iterator, Callable, Sequence
 from typing import Optional, T
 import re
 
@@ -18,8 +18,10 @@ RE_CC_DESC = (
 RE_CENSORED     = re.escape(YT_CENSORED)
 
 NORMALIZE_CC: dict[int, int] = {
-    0x20: 0x005F,  # space to underscore
     0x09: 0x005F,  # tab to underscore
+    0x0A: 0x005F,  # LF to underscore
+    0x0D: 0x005F,  # CR to underscore
+    0x20: 0x005F,  # space to underscore
     # 【】 to []:
     0x3010: 0x005B,
     0x3011: 0x005D
@@ -152,9 +154,15 @@ RE_IN           = r'|'.join(rf'(?P<{name}>{regex})' for name, regex in NAME2RE.i
 sub_in          = re.compile(RE_IN).sub
 
 # If the placeholder is longer than this, MeCab (always?) breaks it into more tokens,
-# which makes replacing it difficult (see retry_if_broken)
-PLACEHOLDER     = 'TUBELEXPLACEHOLDER'
-PLACEHOLDER_SPC = ' TUBELEXPLACEHOLDER '
+# which makes replacing it difficult (see retry_if_broken).
+# Sometimes tokenizers keep placeholders as one token with the neighbor word, e.g.
+# '{word} tubelexplchldr', we resolve that as a third try via retry_if_broken too.
+# Also: Stanza (Indonesian lemmatization?) lowercases, so the placeholder needs
+# to be lowercase.
+PLACEHOLDER     = 'tubelexplchldr'
+PLACEHOLDER_SPC = ' tubelexplchldr '
+PLACEHOLDER_LSPC = ' tubelexplchldr'
+PLACEHOLDER_RSPC = 'tubelexplchldr '
 RE_BROKEN_PLACEHOLDER = r' ?'.join(PLACEHOLDER)
 sub_placeholder = re.compile(rf'\b{PLACEHOLDER}\b').sub
 sub_broken_placeholder = re.compile(rf'\b{RE_BROKEN_PLACEHOLDER}\b').sub
@@ -171,6 +179,45 @@ def _find_substr_in_list(
             if wjk == y:
                 return slice(j, k + 1)
     return None
+
+
+def _it_split_placeholders_in_tokens(tokens: list[str]) -> Iterator[str]:
+    i = 0
+    for j, t in enumerate(tokens):
+        if PLACEHOLDER not in t:
+            continue
+        if t.startswith(PLACEHOLDER_RSPC):
+            yield from tokens[i:j]
+            i = j + 1
+            yield PLACEHOLDER
+            yield t.removeprefix(PLACEHOLDER_RSPC)
+        elif t.endswith(PLACEHOLDER_LSPC):
+            yield from tokens[i:j]
+            i = j + 1
+            yield t.removesuffix(PLACEHOLDER_LSPC)
+            yield PLACEHOLDER
+    yield from tokens[i:]
+
+
+def _it_split_placeholders_in_tagged(
+    tagged: list[tuple[str, str]]
+    ) -> Iterator[list[tuple[str, str]]]:
+    i = 0
+    for j, t_pos in enumerate(tagged):
+        t, pos = t_pos
+        if PLACEHOLDER not in t:
+            continue
+        if t.startswith(PLACEHOLDER_RSPC):
+            yield from tagged[i:j]
+            i = j + 1
+            yield (PLACEHOLDER, pos)
+            yield (t.removeprefix(PLACEHOLDER_RSPC), pos)
+        elif t.endswith(PLACEHOLDER_LSPC):
+            yield from tagged[i:j]
+            i = j + 1
+            yield (t.removesuffix(PLACEHOLDER_LSPC), pos)
+            yield (PLACEHOLDER, pos)
+    yield from tagged[i:]
 
 
 class Replacer:
@@ -262,7 +309,7 @@ class Replacer:
         self.out_idx += 1
         return out
 
-    def _it_replace_broken_in_tokens(self, tokens: Iterable[str]) -> Iterator[str]:
+    def _it_replace_broken_in_tokens(self, tokens: Sequence[str]) -> Iterator[str]:
         i   = 0
         while (s := _find_substr_in_list(tokens, PLACEHOLDER, i)):
             yield from tokens[i:s.start]
@@ -272,7 +319,7 @@ class Replacer:
         yield from tokens[i:]
 
     def _it_replace_broken_in_tagged(
-        self, tagged: Iterable[tuple[str, str]]
+        self, tagged: Sequence[tuple[str, str]]
         ) -> list[tuple[str, str]]:
         i   = 0
         while (s := _find_substr_in_list(tagged, PLACEHOLDER, i, f=lambda tp: tp[0])):
@@ -339,6 +386,10 @@ class Replacer:
             assert isinstance(tokens, Sequence)
             self.out_idx = 0
             repl_tokens = list(self._it_replace_broken_in_tokens(tokens))
+            if not self.all_placeholders_replaced():
+                self.out_idx = 0
+                tokens = list(_it_split_placeholders_in_tokens(tokens))
+                repl_tokens = list(self._it_replace_broken_in_tokens(tokens))
         return repl_tokens
 
     def replace_in_tagged(self,
@@ -352,6 +403,10 @@ class Replacer:
             assert isinstance(tagged, Sequence)
             self.out_idx = 0
             repl_tagged = list(self._it_replace_broken_in_tagged(tagged))
+            if not self.all_placeholders_replaced():
+                self.out_idx = 0
+                tagged = list(_it_split_placeholders_in_tagged(tagged))
+                repl_tagged = list(self._it_replace_broken_in_tagged(tagged))
         return repl_tagged
 
     def all_placeholders_replaced(self) -> bool:
@@ -367,7 +422,7 @@ if __name__ == '__main__':
 #     s0 = ' '.join((['adasd']*10 + ['www.apple.com'])*1000)
 #     r = Replacer()
 #     sp = r.replace_with_placeholders(s0)
-#     spb = sp.replace('TUBELEXPLACEHOLDER', 'T U B E LEXREPLACEMENTPLACEHOLDER')
+#     spb = sp.replace('tubelexplchldr', 't u b e lexplchldr')
 # .split(' ')
 #     print(timeit('r.out_idx=0; r.replace_in_tokens(spb, retry_if_broken=True)',
 # globals=globals(), number=1))
