@@ -28,7 +28,7 @@ TODO/
 /*.out
 /tubelex-frequency-2024-07-15
 /tubelex-frequency-2024-07-23-es
-tubelex-*-removed-addresses.tsv
+tubelex-*-removed-addresses.json
 
 # Subtitle files in eval samples
 /corpus/*

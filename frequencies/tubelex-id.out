@@ -3,41 +3,50 @@ Cleaning stats:
   120000
 * files:
   116708 total
-  21316 too short (<3 lines)
+  21305 too short (<3 lines)
   37 not enough id characters (<0.7 characters of the corresponding charset)
-  60537 not enough detected id (<0.95)
-  34818 valid files after cleaning
+  60579 not enough detected id (<0.95)
+  34787 valid files after cleaning
 * sequences removed from valid files:
   502 tags
-  4864 addresses
 * lines in valid files:
-  3148557 total lines
-  65 whitespace-only lines
+  3146049 total lines
+  0 whitespace-only lines
   159 lines composed of non-id characters
-  3148333 valid lines after cleaning
+  3145890 valid lines after cleaning
 * VTT cue cleanup:
-  2676381 total cues
-  13690 empty cues
-  3294 repeated cues
+  2674532 total cues
+  13701 empty cues
+  3288 repeated cues
   30 scrolling cues
 
 Duplicate (similarity >= 0.95) stats:
-  34818 total
-  134 duplicates removed
-  34684 valid files
+  34787 total
+  136 duplicates removed
+  34651 valid files
 
 [regex]
+[regex]
 Frequency counting stats:
- 22266 CC descriptions filtered
- 34293878 tokens counted
+ 35501746 tokens counted
+ 22282 replacements for <cc_desc>
+ 4349 replacements for <web>
+ 522 replacements for <censored>
+ 403 replacements for <handle>
+ 51 replacements for <email>
 
 --lemma --pos
 [stanza]
+--lemma --pos
+[stanza]
+--lemma --pos
+--lemma --pos
+[stanza]
 Frequency counting stats:
- 22266 CC descriptions filtered
- 34903381 tokens counted
-
-Frequency counting stats:
- 22266 CC descriptions filtered
- 34904605 tokens counted
+ 35534309 tokens counted
+ 22282 replacements for <cc_desc>
+ 4349 replacements for <web>
+ 522 replacements for <censored>
+ 403 replacements for <handle>
+ 51 replacements for <email>
 

@@ -4,55 +4,68 @@ Cleaning stats:
 * files:
   119909 total
   6203 too short (<3 lines)
-  3931 not enough ja characters (<0.7 characters of the corresponding charset)
-  8111 not enough detected ja (<0.95)
-  101664 valid files after cleaning
+  3984 not enough ja characters (<0.7 characters of the corresponding charset)
+  8118 not enough detected ja (<0.95)
+  101604 valid files after cleaning
 * sequences removed from valid files:
   29428 tags
-  1714 addresses
 * lines in valid files:
-  18417195 total lines
-  116 whitespace-only lines
-  37504 lines composed of non-ja characters
-  18379575 valid lines after cleaning
+  18415309 total lines
+  2 whitespace-only lines
+  37549 lines composed of non-ja characters
+  18377758 valid lines after cleaning
 * VTT cue cleanup:
-  14015410 total cues
-  84962 empty cues
-  31492 repeated cues
-  18242 scrolling cues
+  14013329 total cues
+  84379 empty cues
+  31488 repeated cues
+  18241 scrolling cues
 
 Duplicate (similarity >= 0.95) stats:
-  101664 total
-  910 duplicates removed
-  100754 valid files
+  101604 total
+  944 duplicates removed
+  100660 valid files
 
 [unidic-lite]
-Frequency counting stats:
- 253377 CC descriptions filtered
- 163439781 tokens counted
-
+[unidic-310]
+[unidic-lite] --form base --pos
+[unidic-lite] --form lemma --pos
+[unidic-310] --form base --pos
+[unidic-310] --form lemma --pos
+[unidic-lite]
 [unidic-310]
 Frequency counting stats:
- 253377 CC descriptions filtered
- 163234151 tokens counted
+ 165785571 tokens counted
+ 250712 replacements for <cc_desc>
+ 106 replacements for <email>
+ 2678 replacements for <censored>
+ 1285 replacements for <web>
+ 536 replacements for <handle>
 
 [unidic-lite] --form base --pos
 Frequency counting stats:
- 253377 CC descriptions filtered
- 163439781 tokens counted
+ 165932178 tokens counted
+ 250712 replacements for <cc_desc>
+ 106 replacements for <email>
+ 2678 replacements for <censored>
+ 1285 replacements for <web>
+ 536 replacements for <handle>
 
 [unidic-lite] --form lemma --pos
 Frequency counting stats:
- 253377 CC descriptions filtered
- 163462537 tokens counted
+ 165937400 tokens counted
+ 250712 replacements for <cc_desc>
+ 106 replacements for <email>
+ 2678 replacements for <censored>
+ 1285 replacements for <web>
+ 536 replacements for <handle>
 
 [unidic-310] --form base --pos
 Frequency counting stats:
- 253377 CC descriptions filtered
- 163233435 tokens counted
+ 165784855 tokens counted
+ 250712 replacements for <cc_desc>
+ 106 replacements for <email>
+ 2678 replacements for <censored>
+ 1285 replacements for <web>
+ 536 replacements for <handle>
 
 [unidic-310] --form lemma --pos
-Frequency counting stats:
- 253377 CC descriptions filtered
- 163312632 tokens counted
-

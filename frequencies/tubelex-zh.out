@@ -4,34 +4,34 @@ Cleaning stats:
 * files:
   110237 total
   3967 too short (<3 lines)
-  5459 not enough zh characters (<0.7 characters of the corresponding charset)
-  90639 not enough detected zh (<0.95)
-  10172 valid files after cleaning
+  5479 not enough zh characters (<0.7 characters of the corresponding charset)
+  90621 not enough detected zh (<0.95)
+  10170 valid files after cleaning
 * sequences removed from valid files:
   5705 tags
-  150 addresses
 * lines in valid files:
-  1959554 total lines
-  24 whitespace-only lines
-  807 lines composed of non-zh characters
-  1958723 valid lines after cleaning
+  1959425 total lines
+  0 whitespace-only lines
+  819 lines composed of non-zh characters
+  1958606 valid lines after cleaning
 * VTT cue cleanup:
-  1322766 total cues
-  3686 empty cues
+  1322676 total cues
+  3680 empty cues
   610 repeated cues
   307 scrolling cues
 
 Duplicate (similarity >= 0.95) stats:
-  10172 total
+  10170 total
   26 duplicates removed
-  10146 valid files
-
-Frequency counting stats:
- 1158 CC descriptions filtered
- 17865686 tokens counted
+  10144 valid files
 
 --pos
+--pos
+--pos
 Frequency counting stats:
- 1158 CC descriptions filtered
- 18282383 tokens counted
+ 18435056 tokens counted
+ 1157 replacements for <cc_desc>
+ 181 replacements for <web>
+ 23 replacements for <handle>
+ 3 replacements for <email>
 
