@@ -317,8 +317,12 @@ def parse() -> argparse.Namespace:
         help='Limit the list to certain categories (default: all)'
         )
     parser.add_argument(
-        '--limit', type=int, default=None,
-        help='Maximum number of videos to process (for testing purposes)'
+        '--start-index', type=int, default=None,
+        help='Index of the first file to process.'
+        )
+    parser.add_argument(
+        '--stop-index', type=int, default=None,
+        help='Index of the first file not to process.'
         )
 
     parser.add_argument('--clean', '-c', action='store_true', help='Clean up data')
@@ -594,15 +598,15 @@ def get_files_contents(
                 zf.namelist()
                 )
 
-            def iter_contents(max_files=None):
-                for file in files[:max_files]:
+            def iter_contents(start_index=None, stop_index=None):
+                for file in files[start_index:stop_index]:
                     yield zf.read(file).decode(encoding)
 
         elif filenames:
             files = filenames
 
-            def iter_contents(max_files=None):
-                for file in files[:max_files]:
+            def iter_contents(start_index=None, stop_index=None):
+                for file in files[start_index:stop_index]:
                     with open(os.path.join(path, file), encoding=encoding) as f:
                         yield f.read()
         else:
@@ -612,8 +616,8 @@ def get_files_contents(
                 ))
             files = [f for _d, f in dfs]
 
-            def iter_contents(max_files=None):
-                for directory, file in dfs[:max_files]:
+            def iter_contents(start_index=None, stop_index=None):
+                for directory, file in dfs[start_index:stop_index]:
                     with open(os.path.join(directory, file), encoding=encoding) as f:
                         try:
                             yield f.read()
@@ -632,7 +636,8 @@ def do_clean(
     storage: Storage,
     sublist: pd.DataFrame,  # for filtering files
     data_path: str,
-    limit: Optional[int],
+    start_index: Optional[int],
+    stop_index: Optional[int],
     verbose: bool
     ) -> None:
 
@@ -645,7 +650,7 @@ def do_clean(
     videoids = set(sublist.index)  # Faster than index
     dfs = list(
         filter_dir_files(dir_files(data_path, suffix=SUB_SUFFIX), videoids)
-        )[:limit]
+        )[start_index:stop_index]
 
     n_list  = len(sublist)
     n_total = len(dfs)
@@ -766,7 +771,8 @@ def do_unique(
     lang: str,
     identifier: str,
     storage: Storage,
-    limit: Optional[int],
+    start_index: Optional[int],
+    stop_index: Optional[int],
     tokenize: Tokenizer,
     ngram_range: tuple[int, int],
     max_matching: bool = False
@@ -782,8 +788,8 @@ def do_unique(
             ).fit_transform(
             tqdm(
                 desc='Building TF-IDF',
-                iterable=iter_contents(limit),
-                total=len(files[:limit])
+                iterable=iter_contents(start_index, stop_index),
+                total=len(files[start_index:stop_index])
                 )
             )
 
@@ -846,9 +852,9 @@ def do_unique(
         #                 break
 
         print(f'Duplicate (similarity >= {SIMILARITY_LIMIT}) stats:')
-        print(f'  {len(files[:limit])} total')
+        print(f'  {len(files[start_index:stop_index])} total')
         print(f'  {len(dup_indices)} duplicates removed')
-        print(f'  {len(files[:limit])-len(dup_indices)} valid files')
+        print(f'  {len(files[start_index:stop_index])-len(dup_indices)} valid files')
         print()
 
         sorted_dup_indices = sorted(dup_indices)
@@ -869,8 +875,9 @@ def do_unique(
         next_dup = next(iter_dup, None)
         for i, (file,  text) in tqdm(
             desc='Copying valid files',
-            iterable=enumerate(zip(files[:limit], iter_contents(limit))),
-            total=len(files[:limit])
+            iterable=enumerate(zip(files[start_index:stop_index],
+                                   iter_contents(start_index, stop_index))),
+            total=len(files[start_index:stop_index])
             ):
             if i == next_dup:
                 next_dup = next(iter_dup, None)
@@ -897,7 +904,8 @@ def do_frequencies(
     categories: bool,
     pos_tag: Optional[TokenizerTagger],
     filter_cc_descriptions: bool,
-    limit: Optional[int],
+    start_index: Optional[int],
+    stop_index: Optional[int],
     path: Optional[str],
     channel_stats_path: Optional[str],
     removed_addresses_path: Optional[str],
@@ -962,11 +970,12 @@ def do_frequencies(
         encoding=(hkust_mtsc.ENCODING if hkust else DEFAULT_ENCODING)
         ) as files_contents:
         files, iter_contents = files_contents
-        n_videos = len(files[:limit])
+        n_videos = len(files[start_index:stop_index])
         assert n_videos, 'Something went wrong, no subtitles found.'
         for video_no, (file, text) in tqdm(
             desc='Computing frequencies',
-            iterable=enumerate(zip(files[:limit], iter_contents(limit))),
+            iterable=enumerate(zip(files[start_index:stop_index],
+                                   iter_contents(start_index, stop_index))),
             total=n_videos
             ):
             replacer = Replacer(replaced_counter, removed_addresses)
@@ -1005,7 +1014,8 @@ def do_frequencies(
 
             if tokenize is not None:
                 tokenized_or_tagged = list(tokenize(text))   # TODO already list?
-                words = replacer.replace_in_tokens(tokenized_or_tagged, retry=True)
+                words = replacer.replace_in_tokens(tokenized_or_tagged,
+                                                   retry_if_broken=True)
                 counters.add(words, channel_id, cat_id)
                 if verbose:
                     print(f'{file}:')
@@ -1014,7 +1024,8 @@ def do_frequencies(
                     print()
             else:
                 tokenized_or_tagged = list(pos_tag(text))   # TODO already list?
-                words_pos = replacer.replace_in_tagged(tokenized_or_tagged, retry=True)
+                words_pos = replacer.replace_in_tagged(tokenized_or_tagged,
+                                                       retry_if_broken=True)
                 counters.add_pos(words_pos, channel_id, cat_id)
                 if verbose:
                     print(f'{file}:')
@@ -1027,7 +1038,6 @@ def do_frequencies(
                     f'{video_id}: Could replace only {replacer.out_idx} out of '
                     f'{len(replacer.out_tokens)} placeholders.\n'
                     f'- tokens: {replacer.out_tokens}\n'
-                    f'- addresses: {replacer.addresses}\n\n'
                     f'{tokenized_or_tagged}\n'
                     )
 
@@ -1071,7 +1081,8 @@ def do_tokenize(
     storage: Storage,
     tokenized_files: Optional[str],
     tokenize: Tokenizer,
-    limit: Optional[int],
+    start_index: Optional[int],
+    stop_index: Optional[int],
     path: Optional[str],
     removed_addresses_path: Optional[str]
     ) -> None:
@@ -1093,11 +1104,12 @@ def do_tokenize(
             any_suffix=(tokenized_files is not None)
             ) as files_contents:
             files, iter_contents = files_contents
-            n_videos = len(files[:limit])
+            n_videos = len(files[start_index:stop_index])
             assert n_videos, 'Something went wrong, no subtitles found.'
             for file, text in tqdm(
                 desc='Tokenizing',
-                iterable=zip(files[:limit], iter_contents(limit)),
+                iterable=zip(files[start_index:stop_index],
+                             iter_contents(start_index, stop_index)),
                 total=n_videos
                 ):
                 if not tokenized_files:
@@ -1106,21 +1118,30 @@ def do_tokenize(
 
                     # Replace PII and CC descriptions:
                     replacer = Replacer(replaced_counter, removed_addresses)
+                    text_original = text
                     text = replacer.replace_with_placeholders(text)
+                    text_ph = text
 
                 sentences = sseg(convert_newlines_for_tokenization(text))
-
                 tokenized = '\n'.join(' '.join(tokenize(s)) for s in sentences) + '\n'
-                if not tokenized_files:
-                    text = replacer.replace_placeholders_with_tokens(text, retry=True)
 
+                if not tokenized_files:
+                    text = replacer.replace_placeholders_with_tokens(
+                        tokenized, retry_if_broken=True
+                        )
                     if not replacer.all_placeholders_replaced():
                         video_id = file.removesuffix(DATA_SUFFIX)
-                        raise Exception(
+                        print(
                             f'{video_id}: Could replace only {replacer.out_idx} out of '
                             f'{len(replacer.out_tokens)} placeholders.\n'
                             f'- tokens: {replacer.out_tokens}\n'
-                            f'- addresses: {replacer.addresses}\n'
+                            f'NOW: {text}\n\n'
+                            f'PLACEHOLDERS: {text_ph}\n\n'
+                            f'ORIGINAL: {text_original}\n\n', file=sys.stderr
+                            # TODO For Japanese file 0e1QY8hQ5TU.txt, English file
+                            # 16T_0uU4OvE.txt (#8350), a little text is missing after
+                            # segmentation => likely a BUG in pysbd => we ignore it
+                            # Did not happen for id, zh, and for frequency counting.
                             )
 
                 fo.write(nfkc_lower(tokenized))
@@ -1379,7 +1400,8 @@ def get_tokenizers(
 def main() -> None:
     args = parse()
     storage = Storage.from_args(args)
-    limit = args.limit
+    start_index = args.start_index
+    stop_index = args.stop_index
     clean = args.clean
     unique = args.unique
     frequencies = args.frequencies
@@ -1462,7 +1484,8 @@ def main() -> None:
             storage,
             sublist,
             data_path,
-            limit=limit,
+            start_index=start_index,
+            stop_index=stop_index,
             verbose=args.verbose
             )
 
@@ -1490,7 +1513,8 @@ def main() -> None:
                 identifier,
                 storage,
                 tokenize=surface_tokenize,
-                limit=limit,
+                start_index=start_index,
+                stop_index=stop_index,
                 ngram_range=(args.nmin, args.nmax)
                 )
         if frequencies:
@@ -1508,7 +1532,8 @@ def main() -> None:
                 categories=categories,
                 pos_tag=pos_tag,
                 filter_cc_descriptions=args.filter_cc_descriptions,  # TODO TODO ignored
-                limit=limit,
+                start_index=start_index,
+                stop_index=stop_index,
                 path=args.output,
                 channel_stats_path=args.channel_stats,
                 removed_addresses_path=args.removed_addresses,
@@ -1526,7 +1551,8 @@ def main() -> None:
                 storage,
                 tokenized_files=tokenized_files,
                 tokenize=tokenize,
-                limit=limit,
+                start_index=start_index,
+                stop_index=stop_index,
                 path=args.output,
                 removed_addresses_path=args.removed_addresses
                 )

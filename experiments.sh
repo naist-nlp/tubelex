@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Optionally speed things up, once MLSP datasets are downloaded from HF:
+# TODO TODO Optionally speed things up, once MLSP datasets are downloaded from HF:
 export HF_DATASETS_OFFLINE=1
 
 # Exit on error:
