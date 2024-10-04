@@ -1,7 +1,6 @@
-ArXiV submission (pre-print to be announced soon). [Preprint PDF](tubelex-arxiv-submission-v1.pdf).
+# Beyond Film Subtitles: Is YouTube the Best Approximation of Spoken Vocabulary?
 
-**Title:** Beyond Film Subtitles: Is YouTube the Best Approximation of Spoken
-  Vocabulary?
+ArXiV submission (pre-print to be announced soon). [Preprint PDF](tubelex-arxiv-submission-v1.pdf).
 
 **Authors:** Adam Nohejl, Frederikus Hudi, Eunike Andriani Kardinata, Shintaro Ozaki, Maria Angelica Riera Machin, Hongyu Sun, Justin Vasselli, Taro Watanabe
 
