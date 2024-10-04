@@ -2,7 +2,7 @@
 
 TUBELEX is a YouTube subtitle corpus currently available for Chinese, English, Indonesian, Japanese, and Spanish.
 
-- TODO: paper link
+See our [paper preprint](paper).
 
 This repository provides full source code for the project and [word frequency lists](frequencies). We also provide the following models on Hugging Face Hub:
 
