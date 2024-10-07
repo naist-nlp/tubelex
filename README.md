@@ -2,7 +2,15 @@
 
 TUBELEX is a YouTube subtitle corpus currently available for Chinese, English, Indonesian, Japanese, and Spanish.
 
-See our [paper preprint](paper).
+Please read and cite [our preprint](http://arxiv.org/abs/1908.09283):
+```
+@article{nohejl_etal_2024_film,
+  title={Beyond {{Film Subtitles}}: {{Is YouTube}} the {{Best Approximation}} of {{Spoken Vocabulary}}?},
+  author={Nohejl, Adam and Hudi, Frederikus and Kardinata, Eunike Andriani and Ozaki, Shintaro and Riera Machin, Maria Angelica and Sun, Hongyu and Vasselli, Justin and Watanabe, Taro},
+  year={2024}, eprint={2410.03240}, archiveprefix={arXiv}, primaryclass={cs.CL},
+  url={https://arxiv.org/abs/2410.03240v1}, journal={ArXiv preprint}, volume={arXiv:2410.03240v1 [cs]}
+}
+```
 
 This repository provides full source code for the project and [word frequency lists](frequencies). We also provide the following models on Hugging Face Hub:
 
