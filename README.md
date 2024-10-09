@@ -2,7 +2,7 @@
 
 TUBELEX is a YouTube subtitle corpus currently available for Chinese, English, Indonesian, Japanese, and Spanish.
 
-Please read and cite [our preprint](http://arxiv.org/abs/1908.09283):
+Please read and cite [our preprint](https://arxiv.org/abs/2410.03240):
 ```
 @article{nohejl_etal_2024_film,
   title={Beyond {{Film Subtitles}}: {{Is YouTube}} the {{Best Approximation}} of {{Spoken Vocabulary}}?},
