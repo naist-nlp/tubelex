@@ -293,6 +293,8 @@ python experiments/run.py $alt_opt --spoken-bnc 								  --corr  --fam en   	> 
 echo laborotv
 python experiments/run.py $alt_opt -D ipadic --laborotv 						  --corr --fam ja 		> experiments/fam-alt-corr-laborotv.tsv
 
+bash experiments/experiments-fam-c-gini.sh
+
 # Optionally clean up:
 # rm -r experiments/models experiments/output experiments/output.tsv experiments/cache
 

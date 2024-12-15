@@ -24,7 +24,6 @@ KEY2DESC_RE = {
     'files_valid': r'valid files after cleaning',
     # * sequences removed from valid files:
     'rm_tags': r'tags',
-    'rm_addresses': r'addresses',
     # * lines in valid files:
     'lines': r'total lines',
     'lines_ws': r'whitespace-only lines',
@@ -38,8 +37,16 @@ KEY2DESC_RE = {
     # ignore the 2nd 'total' (in the "duplicate" section  == 'files_valid' above)
     'dedup_removed': r'duplicates removed',
     'dedup_valid': r'valid files',
-    'cc_descriptions': r'CC descriptions filtered'
     }
+
+REPL_KEYS = set()
+
+
+# Frequency counting stats:
+for repl in ('cc_desc', 'censored', 'email', 'web', 'handle'):
+    k = f'replaced_{repl}'
+    KEY2DESC_RE[k] = fr'replacements for <{repl}>'
+    REPL_KEYS.add(k)
 
 VALUE_DESC_RE = r'  ?(?P<value>[0-9]+)( (?P<desc>.+))?\n'
 
@@ -65,7 +72,8 @@ def tubelex_out2dict(
                 after_heading_ids = False
             else:
                 after_heading_ids = (line == HEADING_IDS)
-    if (missing := set(KEY2DESC_RE).difference(d)):
+    # Repl_keys are optional (only appearing if replacements were made:
+    if (missing := set(KEY2DESC_RE).difference(d).difference(REPL_KEYS)):
         raise Exception(f'Items {missing} are missing in TUBELEX output {path}')
     return d
 

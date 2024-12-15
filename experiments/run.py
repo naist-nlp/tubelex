@@ -27,7 +27,14 @@ from spalex import get_spalex
 sys.path.append(os.path.join(os.path.dirname(__file__), os.pardir))
 
 from tubelex import add_tokenizer_arg_group, get_tokenizers, nfkc_lower
-from lang_utils import get_re_split
+
+# For languages that can be segmented with a regex (not Chinese or Japanese):
+# Match non-word sequences to split words. Such sequences may consist of:
+# - characters not in \w
+# - characters in \d
+# We need a non-capturing group '(?:...)' for split() to use the whole regex:
+PAT_SPLIT = re.compile(r'(?:[^\w]|\d)+')
+
 
 LANG2FULL_NAME: dict[str, str] = {
     'en': 'English',
@@ -180,6 +187,7 @@ WLSP2COL = {
     'writing-speech': '書記-音声'
     }
 
+
 def get_familiarity_data(
     # IMPORTANT: STATS_DATASETS depends on the number/order of arguments!
     language: str,
@@ -187,7 +195,7 @@ def get_familiarity_data(
     clark_paivio: bool = False,
     moreno_martinez: bool = False,
     amano: bool = False,
-    wlsp: Optional[str] = None # 'reception' (default) or any of WLSP2COL
+    wlsp: Optional[str] = None  # 'reception' (default) or any of WLSP2COL
     # IMPORTANT: STATS_DATASETS depends on the number/order of arguments!
     ) -> pd.Series:
     if language == 'zh':
@@ -477,11 +485,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--cmp-languages', nargs='+', default=None,
                         help='Limit comparison by language codes.')
 
-    parser.add_argument('--cache-tubelex', action='store_true', help=(
+    parser.add_argument('--cache', action='store_true', help=(
         'Cache TUBELEX frequencies for correlation pvalue computation.'
         ))
-    parser.add_argument('--tubelex-cache', default='experiments/cache', help=(
-        'Cache directory for TUBELEX frequencies (--cache-tubelex).'
+    parser.add_argument('--cached', default='tubelex', choices=['tubelex', 'gini'],
+        help='Cache/Read "tubelex" (default) or "gini" values for correlation pvalues.'
+        )
+    parser.add_argument('--cache-dir', default='experiments/cache', help=(
+        'Cache directory (--cache).'
         ))
 
     parser.add_argument(
@@ -921,8 +932,9 @@ def main(args: argparse.Namespace) -> None:
 
     output_files = args.output_files
     model_dir = args.models
-    cache_tubelex = args.cache_tubelex
-    tubelex_cache_dir = args.tubelex_cache
+    cache = args.cache
+    cached = args.cached
+    cache_dir = args.cache_dir
     train = args.train
     correlation = args.correlation
     read_gold = train or correlation
@@ -959,8 +971,9 @@ def main(args: argparse.Namespace) -> None:
             'experiments/output'
             ]
 
-    if cache_tubelex:
-        if not (args.tubelex and
+    if cache:
+        if not (((cached == 'gini' and args.gini) or
+                 (cached == 'tubelex' and args.tubelex)) and
                 args.category is None and
                 args.tokenization is None and
                 args.dictionary is None and
@@ -969,12 +982,13 @@ def main(args: argparse.Namespace) -> None:
             raise Exception(
                 f'Non-default arguments incompatible with --cache-tubelex:\n'
                 f'--tubelex: {args.tubelex}\n'
+                f'--gini: {args.gini}\n'
                 f'--category: {args.category}\n'
                 f'--tokenization: {args.tokenization}\n'
                 f'--dictionary: {args.dictionary}\n'
                 f'--form: {args.form}'
                 )
-        os.makedirs(tubelex_cache_dir, exist_ok=True)
+        os.makedirs(cache_dir, exist_ok=True)
 
     if train:
         if output_files:
@@ -1024,9 +1038,9 @@ def main(args: argparse.Namespace) -> None:
         # These corpora use simple regex tokenization (except for zh/ja)
         # OpenSubtitles, SubIMDB, BNC use something more advanced (similar to Stanza)
         if lang not in ('zh', 'ja'):
-            lang2corpus_specific_tokenizer[lang] = get_re_split().split
+            lang2corpus_specific_tokenizer[lang] = PAT_SPLIT.split
     if args.activ_es:
-        lang2corpus_specific_tokenizer['es'] = get_re_split().split
+        lang2corpus_specific_tokenizer['es'] = PAT_SPLIT.split
 
     assert not args.category or args.tubelex, '--category requires --tubelex'
     for lang in args.tubelex:
@@ -1157,8 +1171,8 @@ def main(args: argparse.Namespace) -> None:
 
     if correlation:
         print(
-            'file\tlanguage\tcorrelation\tcorr_tubelex\t'
-            'n\tn_missing\tcorr_without_missing'
+            f'file\tlanguage\tcorrelation\tcorr_{cached}\t'
+            f'n\tn_missing\tcorr_without_missing'
             )
     elif not train and args.metrics:
         print('file\tlanguage\tPearson\'s r\tMAE\tMSE\tR2')
@@ -1260,7 +1274,9 @@ def main(args: argparse.Namespace) -> None:
             if correlation:
                 assert c is not None
 
-                cache_name = f'tubelex-{lang}-' + (
+                cache_name = (
+                    f'{cached}-{lang}-'
+                    ) + (
                     'mlsp' if mlsp_subsets else
                     'ldt' if ldt_langs else
                     'fam')
@@ -1278,37 +1294,37 @@ def main(args: argparse.Namespace) -> None:
                         cache_name += '.amano'
                     if args.wlsp:
                         cache_name += f'.wlsp_{args.wlsp}'
-                cache_path = os.path.join(tubelex_cache_dir, cache_name + '.npy')
+                cache_path = os.path.join(cache_dir, cache_name + '.npy')
 
-                if cache_tubelex:
+                if cache:
                     np.save(cache_path, logf, allow_pickle=False)
-                    logf_tubelex = logf
+                    logf_cached = logf
                 else:
                     if not os.path.exists(cache_path):
                         print(
-                            f'Warning: No cached TUBELEX frequencies at {cache_path}. '
+                            f'Warning: No cached values at {cache_path}. '
                             f'Will use NA values to compare with instead.',
                             file=sys.stderr
                             )
-                        logf_tubelex = np.full_like(logf, np.nan)
+                        logf_cached = np.full_like(logf, np.nan)
                     else:
-                        logf_tubelex = np.load(cache_path, allow_pickle=False)
-                        if len(logf_tubelex) != len(logf):
+                        logf_cached = np.load(cache_path, allow_pickle=False)
+                        if len(logf_cached) != len(logf):
                             print(
-                                f'Warning: Cached TUBELEX frequencies at {cache_path} '
-                                f'differ in length {len(logf_tubelex)} != {len(logf)}. '
+                                f'Warning: Cached values at {cache_path} '
+                                f'differ in length {len(logf_cached)} != {len(logf)}. '
                                 f'Will use NA values to compare with instead.',
                                 file=sys.stderr
                                 )
-                            logf_tubelex = np.full_like(logf, np.nan)
+                            logf_cached = np.full_like(logf, np.nan)
 
                 r = pearson_r(logf, c)
-                r_tubelex = pearson_r(logf, logf_tubelex)
+                r_cached = pearson_r(logf, logf_cached)
                 n = len(logf)
                 n_missing = sum(missing)
                 r_valid = pearson_r(logf[f_valid], c[f_valid])
                 print(
-                    f'{input_id}\t{LANG2FULL_NAME[lang]}\t{r}\t{r_tubelex}\t'
+                    f'{input_id}\t{LANG2FULL_NAME[lang]}\t{r}\t{r_cached}\t'
                     f'{n}\t{n_missing}\t{r_valid}'
                     )
                 for fields, p in zip(data, logf):

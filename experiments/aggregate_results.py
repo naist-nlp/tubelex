@@ -6,6 +6,7 @@ from corrstats import dependent_corr
 
 
 TUBELEX = 'TUBELEX\\textsubscript{default}'
+GINI = 'GINI'
 CORPUS2ID = {
     'BNC-Spoken': 'spoken-bnc',
     'CREA-Spoken': 'alonso',
@@ -47,6 +48,7 @@ CORPUS2ID = {
 TASK2NAME = {
     'ldt': 'Decision Time',
     'fam': 'Familiarity',
+    'fam-c-gini': 'Familiarity (compared with GINI)',
     'fam-alt': 'Familiarity (Alternative Datasets)',
     'mlsp': 'Complexity',
     }
@@ -89,10 +91,14 @@ def main():
         ('experiments/mlsp-results', ['R2', 'Pearson\'s r'], True, None),
         *((
             f'experiments/{task}-corr',
-            ['correlation', 'corr_tubelex', 'n', 'n_missing', 'corr_without_missing'],
+            ['correlation',
+             'corr_gini' if task == 'fam-c-gini' else 'corr_tubelex',
+             'n', 'n_missing',
+             'corr_without_missing'
+             ],
             False,
             task
-            ) for task in ('ldt', 'fam', 'fam-alt', 'mlsp'))
+            ) for task in TASK2NAME)
             # Exclude 'ldtz' (LDT z-scores) : we have z-scores only for en and zh, and
             # the results are basically the same as for means ('ldt').
             ):
@@ -133,9 +139,16 @@ def main():
             combined_dfs[col] = combined
 
         if 'correlation' in cols:
+            if 'corr_tubelex' in cols:
+                corr2_col = 'corr_tubelex'
+                corp2 = TUBELEX
+            else:
+                assert 'corr_gini' in cols
+                corr2_col = 'corr_gini'
+                corp2 = GINI
             r_task_corp     = combined_dfs['correlation']
-            r_task_tubelex  = r_task_corp.loc[TUBELEX]
-            r_corp_tubelex  = combined_dfs['corr_tubelex']
+            r_task_tubelex  = r_task_corp.loc[corp2]
+            r_corp_tubelex  = combined_dfs[corr2_col]
             ns              = combined_dfs['n']
             d_pvalues       = {}
             for lang, rxt in r_task_tubelex.items():

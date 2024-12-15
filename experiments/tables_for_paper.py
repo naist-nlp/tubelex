@@ -248,6 +248,24 @@ STAT_COL2DESC = {
     }
 
 def main():
+    for results_id in ('sim', 'ana'):
+        df = pd.read_table(
+            f'experiments/embeddings/{results_id}.tsv', sep='\t',
+            index_col=[0, 1]
+            )
+        s = Styler(df, precision=RESULT_PREC)
+        col_fmt = 'l' * s.data.index.nlevels + ('c') * len(s.data.columns)
+        tex = kill_extra_cline(s.to_latex(
+            column_format=col_fmt,
+            clines='skip-last;data',
+            hrules=True
+            ))
+        tex = cline2hline(colapse_latex_table_header(tex, df))
+
+
+        with open(f'experiments/tables/{results_id}.tex', 'w') as fo:
+            fo.write(tex)
+
     for results_id, best, header_levels, results_metric, in (
         ('mlsp', 'min', 1, None),
         ('ldt', 'min', 1, None),
