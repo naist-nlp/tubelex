@@ -1,0 +1,7 @@
+Language	Embeddings	Pearson's $r$	Spearman's $\rho$
+English	Wikipedia	0.379000	0.434000
+English	OpenSubtitles	0.468000	0.532000
+English	TUBELEX	0.385000	0.457000
+Spanish	Wikipedia	0.342000	0.387000
+Spanish	OpenSubtitles	0.445000	0.475000
+Spanish	TUBELEX	0.415000	0.450000

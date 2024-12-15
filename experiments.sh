@@ -299,5 +299,10 @@ python experiments/run.py $alt_opt -D ipadic --laborotv 						  --corr --fam ja 
 echo Aggregating
 
 python experiments/aggregate_results.py
+python experiments/aggregate_embeddings.py
+python experiments/run.py --stats
+python experiments/stats.py 
+python experiments/tables_for_paper.py
+python experiments/plots_for_paper.py
 
 echo Done.
