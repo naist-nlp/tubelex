@@ -1,55 +1,15 @@
-Cleaning stats:
-* video IDs in the list:
-  120000
-* files:
-  119993 total
-  4379 too short (<3 lines)
-  191 not enough en characters (<0.7 characters of the corresponding charset)
-  9459 not enough detected en (<0.95)
-  105964 valid files after cleaning
-* sequences removed from valid files:
-  25790 tags
-* lines in valid files:
-  18453829 total lines
-  11 whitespace-only lines
-  2536 lines composed of non-en characters
-  18451282 valid lines after cleaning
-* VTT cue cleanup:
-  14733237 total cues
-  22183 empty cues
-  16149 repeated cues
-  98991 scrolling cues
-
-Duplicate (similarity >= 0.95) stats:
-  105964 total
-  231 duplicates removed
-  105733 valid files
-
-[regex]
-Frequency counting stats:
- 179139158 tokens counted
- 185302 replacements for <cc_desc>
- 23124 replacements for <web>
- 31098 replacements for <censored>
- 1659 replacements for <email>
- 1609 replacements for <handle>
-
-Warning: Possible markup "align" found among top 6000 words with frequency 2094.
-Warning: Possible markup "align" found among top 6000 words with frequency 2213, in *-lower.
-Warning: Possible markup "align" found among top 6000 words with frequency 2094, in *-nfkc.
-Warning: Possible markup "align" found among top 6000 words with frequency 2213, in *-nfkc-lower.
-[treebank]
-Frequency counting stats:
- 171805865 tokens counted
- 185302 replacements for <cc_desc>
- 23124 replacements for <web>
- 31098 replacements for <censored>
- 1659 replacements for <email>
- 1609 replacements for <handle>
-
-Warning: Possible markup "align" found among top 6000 words with frequency 2076.
-Warning: Possible markup "align" found among top 6000 words with frequency 2193, in *-lower.
-Warning: Possible markup "align" found among top 6000 words with frequency 2076, in *-nfkc.
-Warning: Possible markup "align" found among top 6000 words with frequency 2193, in *-nfkc-lower.
 --lemma --pos
 [stanza]
+[stanza]
+Frequency counting stats:
+ 172457887 tokens counted
+ 185302 replacements for <cc_desc>
+ 23124 replacements for <web>
+ 31098 replacements for <censored>
+ 1659 replacements for <email>
+ 1609 replacements for <handle>
+
+Warning: Possible markup "align" found among top 6000 words with frequency 2085.
+Warning: Possible markup "align" found among top 6000 words with frequency 2204, in *-lower.
+Warning: Possible markup "align" found among top 6000 words with frequency 2085, in *-nfkc.
+Warning: Possible markup "align" found among top 6000 words with frequency 2204, in *-nfkc-lower.

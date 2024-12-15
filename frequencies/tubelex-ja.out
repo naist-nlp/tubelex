@@ -69,3 +69,50 @@ Frequency counting stats:
  536 replacements for <handle>
 
 [unidic-310] --form lemma --pos
+[unidic-lite]
+[unidic-lite]
+[unidic-310]
+Frequency counting stats:
+ 165785571 tokens counted
+ 250712 replacements for <cc_desc>
+ 106 replacements for <email>
+ 2678 replacements for <censored>
+ 1285 replacements for <web>
+ 536 replacements for <handle>
+
+[unidic-lite] --form base --pos
+Frequency counting stats:
+ 165932178 tokens counted
+ 250712 replacements for <cc_desc>
+ 106 replacements for <email>
+ 2678 replacements for <censored>
+ 1285 replacements for <web>
+ 536 replacements for <handle>
+
+[unidic-lite] --form lemma --pos
+Frequency counting stats:
+ 165937400 tokens counted
+ 250712 replacements for <cc_desc>
+ 106 replacements for <email>
+ 2678 replacements for <censored>
+ 1285 replacements for <web>
+ 536 replacements for <handle>
+
+[unidic-310] --form base --pos
+Frequency counting stats:
+ 165784855 tokens counted
+ 250712 replacements for <cc_desc>
+ 106 replacements for <email>
+ 2678 replacements for <censored>
+ 1285 replacements for <web>
+ 536 replacements for <handle>
+
+[unidic-310] --form lemma --pos
+Frequency counting stats:
+ 165721393 tokens counted
+ 250712 replacements for <cc_desc>
+ 106 replacements for <email>
+ 2678 replacements for <censored>
+ 1285 replacements for <web>
+ 536 replacements for <handle>
+

@@ -61,10 +61,10 @@ UNIQUE_PATH_FMT = 'corpus/unique-%s'
 # Defaults for CLI arguments:
 DATA_PATH_FMT = 'jtubespeech-subtitles/video/%s/vtt'
 SUBLIST_PATH_FMT = 'jtubespeech-subtitles/sub/%s/%s_sample.csv'
-DEFAULT_FREQ_PATH_FMT = 'tubelex-%s%%.tsv'
+DEFAULT_FREQ_PATH_FMT = 'frequencies/tubelex-%s%%.tsv'
 DEFAULT_TOK_PATH_FMT = 'corpus/tokenized-%s.txt'
-DEFAULT_CHANNEL_STATS_PATH_FMT = 'tubelex-%s-channels.tsv'
-DEFAULT_REM_ADDR_PATH_FMT = 'tubelex-%s-removed-addresses.json'
+DEFAULT_CHANNEL_STATS_PATH_FMT = 'frequencies/tubelex-%s-channels.tsv'
+DEFAULT_REM_ADDR_PATH_FMT = 'frequencies/tubelex-%s-removed-addresses.json'
 DEFAULT_MIN_VIDEOS = 0
 DEFAULT_MIN_CHANNELS = 0
 
@@ -1034,11 +1034,11 @@ def do_frequencies(
                     print()
 
             if not replacer.all_placeholders_replaced():
-                raise Exception(
-                    f'{video_id}: Could replace only {replacer.out_idx} out of '
+                print(
+                    f'{video_id}: s {replacer.out_idx} out of '
                     f'{len(replacer.out_tokens)} placeholders.\n'
                     f'- tokens: {replacer.out_tokens}\n'
-                    f'{tokenized_or_tagged}\n'
+                    f'{tokenized_or_tagged}\n\n', file=sys.stderr
                     )
 
             counters.close_doc()

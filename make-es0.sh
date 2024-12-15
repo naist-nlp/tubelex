@@ -5,6 +5,9 @@
 #SBATCH -p lang_short
 #SBATCH -c1
 
+# Exit on error:
+set -e
+
 DIR=frequencies
 
 python tubelex.py --lang es -x --clean --unique > ${DIR}/tubelex-es.out

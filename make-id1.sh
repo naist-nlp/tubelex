@@ -6,6 +6,9 @@
 #SBATCH --time=24:00:00
 #SBATCH -c4
 
+# Exit on error:
+set -e
+
 DIR=frequencies
 
 echo '[stanza]' >> ${DIR}/tubelex-id.out
