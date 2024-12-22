@@ -2,9 +2,10 @@ from typing import NamedTuple, Optional
 from contextlib import contextmanager
 from zipfile import ZipFile
 from typing import TextIO, TypedDict, Union, ContextManager
-from collections import Counter
+from collections import Counter, defaultdict
 from collections.abc import Sequence, Iterator
 from urllib.request import urlretrieve
+import numpy as np
 import lzma
 import gzip
 import io
@@ -129,6 +130,7 @@ FREQ_DATA_LANGS     = list(LANG2SUBT.keys())
 FREQ_DATA_CORPORA   = ['subtitles', 'wiki']
 
 TOTAL_KEY = '[TOTAL]'
+CAT_PREFIX = 'count:'
 COLS_DEFAULT    = 3  # (word, frequency, contextual diversity)
 COLS_RANGE      = range(2, 4)   # at least (word, frequency)
 DEFAULT_DELIMITER = '\t'
@@ -178,6 +180,8 @@ class FrequencyData(NamedTuple):
     cd: Optional[Counter[str]]    # contextual diversity (document frequency)
     f_total: int
     cd_total: Optional[int] = None
+    cat_f: Optional[dict[str, list[int]]] = None
+    cat_f_totals: Optional[list[int]] = None
 
     @staticmethod
     def load(
@@ -190,9 +194,11 @@ class FrequencyData(NamedTuple):
         delimiter: str = DEFAULT_DELIMITER,
         cased: bool = False,
         to_lower: bool = False,
+        categories: bool = False,
+        categories_as_cd: bool = False,
         verbose: bool = False,
         filename: Optional[str] = None,  # for exceptions
-        ignore_errors: bool = False
+        ignore_errors: bool = False,
         ) -> 'FrequencyData':
         f: Counter[str] = Counter()
         cd: Optional[Counter[str]]
@@ -205,8 +211,13 @@ class FrequencyData(NamedTuple):
         if total_header:
             if total_row:
                 raise ValueError(f'{exc_fn}Both total_header and total_row are True.')
+            if categories or categories_as_cd:
+                raise ValueError(
+                    f'{exc_fn}Both total_header categories(_as_cd) are True.'
+                    )
             f_total = _total_from_header(next(file), 'Total word count')
             cd_total = _total_from_header(next(file), 'Context number')
+            cat_f_totals = None
 
         if to_lower and cased:
             raise ValueError(
@@ -225,8 +236,16 @@ class FrequencyData(NamedTuple):
             if not cols:
                 raise ValueError(f'sub_lemma={sub_lemma}, but cols is None.')
 
+        if (categories or categories_as_cd) and not header:
+            raise ValueError(
+                f'{exc_fn}Categories(_as_cd) are True, but header is False.'
+                )
+
         indices: Sequence[int] = range(COLS_DEFAULT)
+        cat_indices: Optional[Sequence[int]] = None
         if header:
+            # get `header_cols`: for cols, categories or categories_as_cd
+            # (not used directly for anything else)
             if isinstance(header, Sequence):
                 header_cols = header
             else:
@@ -235,16 +254,25 @@ class FrequencyData(NamedTuple):
                     # ignore any number of opening comments that start with a '#'
                     if line.startswith('#'):
                         continue
-                    if cols is not None:
-                        header_cols = line.rstrip('\n').split(delimiter)
-                    # else just ignore
+                    header_cols = line.rstrip('\n').split(delimiter)
                     break
             if cols:
                 indices = [header_cols.index(c) for c in cols]
                 if sub_lemma is not None:
                     sub_lemma_index = header_cols.index(sub_lemma)
+            if categories or categories_as_cd:
+                cat_indices = np.array([
+                    i for i, c in enumerate(header_cols)
+                    if c.startswith(CAT_PREFIX)
+                    ], dtype=int)
 
-        cd = Counter() if (len(indices) == COLS_DEFAULT) else None
+        cd = Counter() if (
+            (len(indices) == COLS_DEFAULT) or
+            categories_as_cd
+            ) else None
+        cat_f = defaultdict(
+            lambda: np.zeros_like(cat_indices)
+            ) if categories else None
 
         freq = None
         for line in file:
@@ -262,8 +290,17 @@ class FrequencyData(NamedTuple):
 
                 # Use += to allow for possible lowercasing via `to_lower`:
                 f[word]         += int(freq)
+
+                if cat_indices is not None:
+                    wcat_f = np.array(fields)[cat_indices].astype(int)
+                    if categories:
+                        cat_f[word] += wcat_f
+
                 if cd is not None:
-                    wcd = int(*opt_docs)
+                    wcd = (
+                        wcat_f.astype(bool).sum() if categories_as_cd else
+                        int(*opt_docs)
+                        )
                     if to_lower:
                         cd[word] = max(cd[word], wcd)
                     cd[word]    += wcd
@@ -279,10 +316,13 @@ class FrequencyData(NamedTuple):
         if total_row:
             total_key = total_row if isinstance(total_row, str) else TOTAL_KEY
             f_total         = f.pop(total_key)
+            # Works for categories_as_cd too (assuming all categories are non-empty):
             cd_total        = cd.pop(total_key) if (cd is not None) else None
+            cat_f_totals    = cat_f.pop(total_key) if (cat_f is not None) else None
         elif not total_header:
             f_total         = sum(f.values())
             cd_total        = None
+            cat_f_totals    = None
 
         if CHECK_CASE:
             # w.islower() is False for CJK, so we use `w.lower()==w`:
@@ -303,12 +343,13 @@ class FrequencyData(NamedTuple):
             lcase_msg = ' after lowercasing' if to_lower else ''
             sys.stderr.write(
                 f'- {n_total} words in file{lcase_msg}\n'
-                f'- totals ({total_source}): f={f_total}, cd={cd_total}\n'
+                f'- totals ({total_source}): f={f_total}, cd={cd_total}, '
+                f'cat_f={cat_f_totals}\n'
                 )
             if n_ignored_errors:
                 sys.stderr.write(f'- {n_ignored_errors} ignored errors\n')
 
-        fd = FrequencyData(f, cd, f_total, cd_total)
+        fd = FrequencyData(f, cd, f_total, cd_total, cat_f, cat_f_totals)
         return fd
 
     def smooth_frequency_missing(self, word: str) -> tuple[float, bool]:
@@ -326,6 +367,25 @@ class FrequencyData(NamedTuple):
         return (
             (count_w + 1) / (self.f_total + len(f)),    # smooth_frequency
             not count_w                                 # missing
+            )
+
+    def smooth_cat_frequencies_missing(self, word: str) -> tuple[np.array, np.array]:
+        '''
+        Return a pair of vectors (size=#categories):
+        - non-zero floats: frequencies smoothed out for missing values,
+        - bools: whether the word is missing.
+
+                                count(w) + 1
+        smooth_frequency(w) = ----------------
+                              #tokens + #types
+
+        Note: #types counted in the whole corpus, not per category!
+        '''
+        f  = self.cat_f
+        count_w = f[word]
+        return (
+            (count_w + 1) / (self.cat_f_totals + len(f)),   # smooth_frequency
+            count_w == 0                                    # missing
             )
 
     @staticmethod
@@ -353,14 +413,16 @@ class FrequencyData(NamedTuple):
         delimiter: str = DEFAULT_DELIMITER,
         cased: bool = False,
         to_lower: bool = False,
+        categories: bool = False,
+        categories_as_cd: bool = False,
         verbose: bool = False,
         ignore_errors: bool = False
         ) -> 'FrequencyData':
         with FrequencyData._open(filename, zip_args) as file:
             return FrequencyData.load(
                 file, total_row, total_header, header, cols, sub_lemma, delimiter,
-                cased, to_lower, verbose=verbose, filename=filename,
-                ignore_errors=ignore_errors
+                cased, to_lower, categories, categories_as_cd,
+                verbose=verbose, filename=filename, ignore_errors=ignore_errors
                 )
 
     @staticmethod
@@ -376,6 +438,8 @@ class FrequencyData(NamedTuple):
         delimiter: str = DEFAULT_DELIMITER,
         cased: bool = False,
         to_lower: bool = False,
+        categories: bool = False,
+        categories_as_cd: bool = False,
         force_verbose: bool = False,
         ignore_errors: bool = False
         ) -> 'FrequencyData':
@@ -389,7 +453,8 @@ class FrequencyData(NamedTuple):
 
         return FrequencyData.from_file(
             filename, zip_args, total_row, total_header, header, cols, sub_lemma,
-            delimiter, cased, to_lower, verbose=verbose, ignore_errors=ignore_errors
+            delimiter, cased, to_lower, categories, categories_as_cd,
+            verbose=verbose, ignore_errors=ignore_errors
             )
 
     @staticmethod
@@ -480,7 +545,7 @@ class FrequencyData(NamedTuple):
             if cd_total < 0:
                 raise ValueError(f'Negative total CD after subtraction: {cd_total}')
 
-        return FrequencyData(f, cd, f_total, cd_total)
+        return FrequencyData(f, cd, f_total, cd_total)  # ignores categories
 
 
 if __name__ == '__main__':
