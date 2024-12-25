@@ -83,6 +83,41 @@ LANG2DATASET_ID = {
     }
 
 
+class MeasureSpec(NamedTuple):
+    function:  Callable[[FrequencyData, str], float]
+    params:    dict = dict(categories=True)  # use categories for dispersion by default
+
+    @property
+    def can_smooth(self) -> bool:
+        return 'smooth' in self.function.__annotations__
+
+    def __call__(self, fd: FrequencyData, w: str, smooth: bool = False) -> float:
+        return (self.function(fd, w, smooth=True) if smooth else
+                self.function(fd, w))
+
+
+MEASURE2SPEC = {
+    'frequency':            MeasureSpec(lambda fd, w: fd.smooth_frequency_missing(w)[0],
+                                        {}),  # Note: always smooth
+    # range (based on cd):
+    'range_videos':         MeasureSpec(FrequencyData.cd_range,
+                                        dict(cols=('word', 'count', 'videos'))),
+    'range_channels':       MeasureSpec(FrequencyData.cd_range,
+                                        dict(cols=('word', 'count', 'channels'))),
+    'range_categories':     MeasureSpec(FrequencyData.cd_range,
+                                        dict(categories_as_cd=True)),
+    # methods based on categories:
+    'weighted_range':       MeasureSpec(FrequencyData.weighted_range),
+    'gini':                 MeasureSpec(FrequencyData.gini_dispersion),
+    'maxmin':               MeasureSpec(FrequencyData.maxmin_dispersion),
+    'juilland_d':           MeasureSpec(FrequencyData.juilland_d),
+    'vmr':                  MeasureSpec(FrequencyData.vmr_dispersion),
+    'gries_dp':             MeasureSpec(FrequencyData.gries_dp_dispersion),
+    'rosengren_s':          MeasureSpec(FrequencyData.rosengren_s),
+    'carrol_d2':            MeasureSpec(FrequencyData.carrol_d2)
+    }
+
+
 def get_mlsp_dataset(
     lang_or_id: str,
     train: bool = False,
@@ -285,7 +320,8 @@ def get_tubelex_freq_data(
     language: str,
     tokenization: Optional[str] = None,     # regex, treebank
     form: str = 'surface',                  # surface, base, lemma
-    category: Optional[str] = None
+    category: Optional[str] = None,
+    params: Optional[dict] = None
     ) -> FrequencyData:
 
     if tokenization is not None:
@@ -300,15 +336,18 @@ def get_tubelex_freq_data(
         if form != 'surface':
             language = f'{language}-{form}-pos'  # note: we ignore POS
 
-    cols = (
-        ('word', f'count:{category}') if category is not None
-        else None
-        )
+    assert category is None or not params, 'cannot specifify category AND params'
+
+    if not params:
+        params = dict(cols=(
+            ('word', f'count:{category}') if category is not None
+            else None
+            ))
 
     return FrequencyData.from_file_url(
         filename=f'frequencies/tubelex-{language}-nfkc-lower.tsv.xz',
         total_row=True,
-        cols=cols
+        **params
         )
 
 
@@ -488,7 +527,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--cache', action='store_true', help=(
         'Cache TUBELEX frequencies for correlation pvalue computation.'
         ))
-    parser.add_argument('--cached', default='tubelex', choices=['tubelex', 'gini'],
+    parser.add_argument(
+        '--cached', default='tubelex', choices=['tubelex', 'gini'],
         help='Cache/Read "tubelex" (default) or "gini" values for correlation pvalues.'
         )
     parser.add_argument('--cache-dir', default='experiments/cache', help=(
@@ -631,11 +671,24 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         '--hkust-mtsc', action='store_true', help='Use HKUST/MCTS for Chinese.'
         )
-    parser.add_argument(
+    measures = parser.add_mutually_exclusive_group()
+    measures.add_argument(
         '--minus', action='store_true', help='Use opposite value instead of log.'
         )
-    parser.add_argument(
+    measures.add_argument(
         '--minus-log', action='store_true', help='Use minus log instead of log.'
+        )
+    measures.add_argument(
+        '--measure', choices=MEASURE2SPEC, default=None,
+        help='Use a specific measure computed from TUBELEX (specifiy log separately)'
+        )
+    parser.add_argument(
+        '--log-measure', action='store_true',
+        help='Use the logarightm of the specified measure.'
+        )
+    parser.add_argument(
+        '--smooth', action='store_true',
+        help='Smooth the specified measure.'
         )
     parser.add_argument('--models', default='experiments/models',
                         help='Model directory.')
@@ -960,6 +1013,17 @@ def main(args: argparse.Namespace) -> None:
     if args.log_lookups is not None:
         f_lookups = open(args.log_lookups, 'a')
 
+    measure     = None
+    if args.measure:
+        assert args.tubelex, '--measure requires --tubelex'
+        measure = MEASURE2SPEC[args.measure]
+    log_measure = args.log_measure
+    smooth      = args.smooth
+    assert measure or not log_measure, '--log-measure requires --measure'
+    assert measure or not smooth, '--smooth requires --measure'
+    if smooth and not measure.can_smooth:
+        raise Exception('The specified measure does not support smoothing.')
+
     # Tokenization:
     tokenize_c_j = not args.no_c_j_tokenize
 
@@ -1047,7 +1111,8 @@ def main(args: argparse.Namespace) -> None:
         lang2freq_data[lang] = get_tubelex_freq_data(
             lang,
             form=args.form, tokenization=args.tokenization,
-            category=args.category
+            category=args.category,
+            params=(measure.params if (measure is not None) else None)
             )
 
     for lang in args.wikipedia:
@@ -1138,6 +1203,11 @@ def main(args: argparse.Namespace) -> None:
                                        lang2gini_func.get(lang))) is not None:
             return frequency_missing_func(w)
         if (freq_data := lang2freq_data.get(lang)) is not None:
+            if measure is not None:
+                return (
+                    measure(freq_data, w, smooth=smooth),
+                    False   # TODO: We assume not missing
+                    )
             return freq_data.smooth_frequency_missing(w)
         # We cannot smooth frequencies from wordfreq, so we use minimum instead:
         return wf_frequency_missing(w, lang, minimum=get_wf_min_freq(lang))
@@ -1261,14 +1331,28 @@ def main(args: argparse.Namespace) -> None:
                     f'{lang}: #={len(targets)}, '
                     f'missing frequency #={len(miss_t)}: {miss_t}'
                     )
-            assert all(frequencies)  # all should be non-zero
             f = np.array(frequencies)
+            assert (
+                (measure and not smooth) or     # allow zero, check for nans later
+                (f != 0).all()                  # all should be (smoothed) non-zero
+                )
             f_valid = ~np.array(missing, dtype=bool)
             logf = (
+                (np.log10(f) if log_measure else f) if (measure is not None) else
                 (-f) if args.minus else
                 (-np.log10(f)) if args.minus_log else
                 np.log10(f)
                 )
+            assert not np.isnan(logf).any()
+            if np.isinf(logf).any():
+                raise Exception(
+                    f'logf contains a +-inf: smoothing (--smooth) may be necessary.\n'
+                    f'Diagnostics:\n'
+                    f' - 0 in raw measure values: {(f == 0).any()}\n'
+                    f' - measure:                 {args.measure}\n'
+                    f' - smooth:                  {args.smooth}\n'
+                    f' - log_measure:             {args.log_measure}\n'
+                    )
             c = np.array(gold) if gold else None
 
             if correlation:
@@ -1280,6 +1364,11 @@ def main(args: argparse.Namespace) -> None:
                     'mlsp' if mlsp_subsets else
                     'ldt' if ldt_langs else
                     'fam')
+                if args.measure is not None:
+                    m_name = args.measure
+                    if log_measure:
+                        m_name = 'log_' + m_name
+                    cache_name = f'{m_name}-{cache_name}'
                 if ldt_langs:
                     if args.zscore:
                         cache_name += '.zscore'

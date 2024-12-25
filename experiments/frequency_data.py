@@ -2,7 +2,7 @@ from typing import NamedTuple, Optional
 from contextlib import contextmanager
 from zipfile import ZipFile
 from typing import TextIO, TypedDict, Union, ContextManager
-from collections import Counter, defaultdict
+from collections import Counter
 from collections.abc import Sequence, Iterator
 from urllib.request import urlretrieve
 import numpy as np
@@ -13,6 +13,19 @@ import sys
 import os
 
 CHECK_CASE = False
+
+class CounterDict(dict):
+    '''
+    Like defaultdict, but doesn't insert missing values, behaving similar to Counter.
+    '''
+    def __init__(self, default_factory, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.default_factory = default_factory
+
+    def __missing__(self, key):
+        if self.default_factory is None:
+            raise KeyError(key)
+        return self.default_factory()
 
 
 def _mkdir_parent(path: str) -> None:
@@ -270,7 +283,7 @@ class FrequencyData(NamedTuple):
             (len(indices) == COLS_DEFAULT) or
             categories_as_cd
             ) else None
-        cat_f = defaultdict(
+        cat_f = CounterDict(
             lambda: np.zeros_like(cat_indices)
             ) if categories else None
 
@@ -298,7 +311,7 @@ class FrequencyData(NamedTuple):
 
                 if cd is not None:
                     wcd = (
-                        wcat_f.astype(bool).sum() if categories_as_cd else
+                        (wcat_f != 0).sum() if categories_as_cd else
                         int(*opt_docs)
                         )
                     if to_lower:
@@ -387,6 +400,179 @@ class FrequencyData(NamedTuple):
             (count_w + 1) / (self.cat_f_totals + len(f)),   # smooth_frequency
             count_w == 0                                    # missing
             )
+
+    # All of the following are defined so that:
+    # - Values fall in [0, 1]
+    # - Values = 1 or close to 1 correspond to maximum dispersion (distribution
+    #   even across parts). If the original definition did not achieve this, we redefine
+    #   the metric X as X_dispersion = 1 - X.
+    # - For a word outside corpus, we always return 0 (minimum dispersion), regardless
+    #   of what would be computed by the formula.
+    # - The dispersions are computed in a way appropriate for corpus parts of different
+    #   size. If necessary, we adjusted the original formulas for that.
+    #
+    # Available measures:
+    # - range (normalized contextual diversity)
+    # - gini_dispersion
+    # - maxmin_dispersion
+    # - juilland_d
+    # - gries_dp_dispersion
+    # - rosengren_s
+    # - carrol_d2
+
+    def cd_range(self, word: str, smooth: bool = False) -> float:
+        '''
+        Normalized range (in 0..1) based on `cd`, (categories only if categories_as_cd).
+        '''
+        return (
+            (self.cd[word] + 1) / (self.cd_total + 1) if smooth else
+            self.cd[word] / self.cd_total               # may be 0 if word not in cd
+            )
+
+    def weighted_range(self, word: str, smooth: bool = False) -> float:
+        '''
+        Normalized weighted range, only for categories (not based on cd).
+        '''
+        cat_f_totals = self.cat_f_totals
+        return (
+            (
+                (((self.cat_f[word] != 0) * cat_f_totals).sum() + 1) /
+                (cat_f_totals.sum() + 1)
+                ) if smooth else
+            ((self.cat_f[word] != 0) * cat_f_totals).sum() / cat_f_totals.sum()
+            )
+
+    def gini_dispersion(self, word: str, smooth: bool = False) -> float:
+        '''
+        This is Gini *dispersion* (i.e. equality), i.e. the complement of
+        the Gini inequality index.
+
+        As described by Murayama et al. (2018), except for finally not applying -log.
+        Equivalent: DA (Egbert et al., 2020).
+
+        Smoothing is added by smoothing the individual frequencies.
+        '''
+
+        if smooth:
+            f_w = self.smooth_cat_frequencies_missing(word)[0]
+        else:
+            f = self.cat_f
+            if word not in f:
+                return 0.0                              # no dispersion
+            f_w = f[word] / self.cat_f_totals           # normalize by category
+
+        # We normalize by word before the final computation, as this will make the
+        # numbers larger, resulting in better precision:
+        f_w /= f_w.sum()                            # normalize by word
+
+
+        n = len(f_w)
+        as_rows = np.tile(f_w, (n, 1))
+        as_cols = as_rows.T
+
+        # No need to divide by f_w.sum() == f_w.mean() * n,
+        # which is == 1 after the normalization by word.
+        # Note that we are returning complement (1 - Gini inequality), i.e. index
+        # of dispersion
+        return 1 - np.abs(as_rows - as_cols).sum() / (2 * n)
+
+    def maxmin_dispersion(self, word: str, smooth: bool = False) -> float:
+        if smooth:
+            f_w = self.smooth_cat_frequencies_missing(word)[0]
+        else:
+            f = self.cat_f
+            if word not in f:
+                return 0.0                              # no dispersion
+            f_w = f[word] / self.cat_f_totals           # normalize by category
+
+        # Do not normalize by word, max - min is already in 0..1:
+        return 1 - (f_w.max() - f_w.min())  # 1 - maxmin
+
+    def juilland_d(self, word: str, smooth: bool = False) -> float:
+        # ~ variation coefficient
+
+        if smooth:
+            f_w = self.smooth_cat_frequencies_missing(word)[0]
+        else:
+            f = self.cat_f
+            if word not in f:
+                return 0.0                              # no dispersion
+            f_w = f[word] / self.cat_f_totals           # normalize by category
+
+        # Do not normalize by word: no effect on VC = SD / mean:
+        vc = np.std(f_w) / np.mean(f_w)
+        return 1 - vc / np.sqrt(len(f_w) - 1)   # D
+
+    def vmr_dispersion(self, word: str, smooth: bool = False) -> float:
+        # https://en.wikipedia.org/wiki/Index_of_dispersion
+        # variance-to-mean ratio (VMR)
+
+        if smooth:
+            f_w = self.smooth_cat_frequencies_missing(word)[0]
+        else:
+            f = self.cat_f
+            if word not in f:
+                return 0.0                              # no dispersion
+            f_w = f[word] / self.cat_f_totals           # normalize by category
+
+        f_w /= f_w.sum()                        # Normalize by word => 0..1 range
+
+        vmr = np.var(f_w) / np.mean(f_w)
+        return 1 - vmr
+
+    def gries_dp_dispersion(self, word: str, smooth: bool = False) -> float:
+        f = self.cat_f
+        if not smooth and word not in f:
+            return 0.0                                  # no dispersion
+        f_w = f[word]
+
+        f_totals    = self.cat_f_totals
+
+        if smooth:
+            # Smoothing as if using smooth_cat_frequencies_missing().
+            # Note: Avoid += so that we do not overwrite original values in dict.
+            f_w         = f_w + 1
+            f_totals    = f_totals + len(self.cat_f)
+        cat_prop    = f_totals / f_totals.sum()
+        word_prop   = f_w / f_w.sum()
+
+        # Return 1 - DP (= D_P in Egbert et al.(2020))
+        return 1 - np.sum(np.abs(word_prop - cat_prop)) / 2
+
+    def rosengren_s(self, word: str, smooth: bool = False) -> float:
+        if smooth:
+            f_w = self.smooth_cat_frequencies_missing(word)[0]
+        else:
+            f = self.cat_f
+            if word not in f:
+                return 0.0                              # no dispersion
+            f_w = f[word] / self.cat_f_totals           # normalize by category
+
+        # We normalize by word before the final computation, as this will make the
+        # numbers larger, resulting in better precision:
+        f_w /= f_w.sum()                            # normalize by word
+        return np.sqrt(f_w).sum() ** 2 / len(f_w)
+
+    def carrol_d2(self, word: str, smooth: bool = False) -> float:
+        if smooth:
+            f_w = self.smooth_cat_frequencies_missing(word)[0]
+        else:
+            f = self.cat_f
+            if word not in f:
+                return 0.0                              # no dispersion
+            f_w = f[word] / self.cat_f_totals           # normalize by category
+
+        # We normalize by word before the final computation, as this will make the
+        # numbers larger, resulting in better precision:
+        f_w /= f_w.sum()                            # normalize by word
+
+        nz_f_w = f_w[f_w != 0]                      # ignore zeros (avoid -Inf->NaNs)
+        log_f_w = np.log(nz_f_w)
+        entropy = - (nz_f_w * log_f_w).sum()
+
+        # 1 ~ max entropy ~ max dispersion
+        # Same as \eta (efficiency) in information theory
+        return entropy / np.log(len(f_w))           # do NOT ignore zeros here
 
     @staticmethod
     def _open(
