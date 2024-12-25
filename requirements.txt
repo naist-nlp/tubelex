@@ -19,3 +19,4 @@ tqdm==4.66.1
 unidic==1.1.0
 unidic-lite==1.0.8
 yt-dlp==2023.10.13
+pysbd==0.3.4
