@@ -35,6 +35,7 @@ from tubelex import add_tokenizer_arg_group, get_tokenizers, nfkc_lower
 # We need a non-capturing group '(?:...)' for split() to use the whole regex:
 PAT_SPLIT = re.compile(r'(?:[^\w]|\d)+')
 
+NP_EPS = np.finfo(float).eps
 
 LANG2FULL_NAME: dict[str, str] = {
     'en': 'English',
@@ -91,9 +92,19 @@ class MeasureSpec(NamedTuple):
     def can_smooth(self) -> bool:
         return 'smooth' in self.function.__annotations__
 
-    def __call__(self, fd: FrequencyData, w: str, smooth: bool = False) -> float:
-        return (self.function(fd, w, smooth=True) if smooth else
-                self.function(fd, w))
+    @property
+    def can_weight(self) -> bool:
+        return 'weight' in self.function.__annotations__
+
+    def __call__(self, fd: FrequencyData, w: str,
+                 smooth: bool = False, weight: bool = False) -> float:
+        if smooth:
+            if weight:
+                return self.function(fd, w, smooth=True, weight=True)
+            return self.function(fd, w, smooth=True)
+        if weight:
+            return self.function(fd, w, weight=True)
+        return self.function(fd, w)
 
 
 MEASURE2SPEC = {
@@ -110,10 +121,13 @@ MEASURE2SPEC = {
     'weighted_range':       MeasureSpec(FrequencyData.weighted_range),
     'gini':                 MeasureSpec(FrequencyData.gini_dispersion),
     'maxmin':               MeasureSpec(FrequencyData.maxmin_dispersion),
+    'ada':                  MeasureSpec(FrequencyData.ada),
     'juilland_d':           MeasureSpec(FrequencyData.juilland_d),
     'vmr':                  MeasureSpec(FrequencyData.vmr_dispersion),
     'gries_dp':             MeasureSpec(FrequencyData.gries_dp_dispersion),
+    'gries_dp_eq':          MeasureSpec(FrequencyData.gries_dp_eq_dispersion),
     'rosengren_s':          MeasureSpec(FrequencyData.rosengren_s),
+    'sqrt':                 MeasureSpec(FrequencyData.rosengren_like_sqrt),
     'carrol_d2':            MeasureSpec(FrequencyData.carrol_d2)
     }
 
@@ -686,10 +700,20 @@ def parse_args() -> argparse.Namespace:
         '--log-measure', action='store_true',
         help='Use the logarightm of the specified measure.'
         )
-    parser.add_argument(
+
+    smooth_clip = parser.add_mutually_exclusive_group()
+    smooth_clip.add_argument(
         '--smooth', action='store_true',
         help='Smooth the specified measure.'
         )
+    smooth_clip.add_argument(
+        '--eps-clip', action='store_true',
+        help='Clip the specified measure to values >= epsilon.'
+        )
+    parser.add_argument(
+        '--weight', action='store_true',
+        help='Weight the specified measure by corpus part (category) size.'
+    )
     parser.add_argument('--models', default='experiments/models',
                         help='Model directory.')
     parser.add_argument('--verbose', '-v', action='store_true')
@@ -1019,10 +1043,15 @@ def main(args: argparse.Namespace) -> None:
         measure = MEASURE2SPEC[args.measure]
     log_measure = args.log_measure
     smooth      = args.smooth
+    weight      = args.weight
+    eps_clip    = args.eps_clip
     assert measure or not log_measure, '--log-measure requires --measure'
-    assert measure or not smooth, '--smooth requires --measure'
+    assert measure or not (smooth or eps_clip), '--smooth/--eps-clip require --measure'
+    assert measure or not weight, '--weight require --measure'
     if smooth and not measure.can_smooth:
         raise Exception('The specified measure does not support smoothing.')
+    if weight and not measure.can_weight:
+        raise Exception('The specified measure does not support weighting.')
 
     # Tokenization:
     tokenize_c_j = not args.no_c_j_tokenize
@@ -1204,10 +1233,10 @@ def main(args: argparse.Namespace) -> None:
             return frequency_missing_func(w)
         if (freq_data := lang2freq_data.get(lang)) is not None:
             if measure is not None:
-                return (
-                    measure(freq_data, w, smooth=smooth),
-                    False   # TODO: We assume not missing
-                    )
+                f = measure(freq_data, w, smooth=smooth, weight=weight)
+                if eps_clip:
+                    f = max(NP_EPS, f)
+                return (f, False)   # TODO: We assume not missing
             return freq_data.smooth_frequency_missing(w)
         # We cannot smooth frequencies from wordfreq, so we use minimum instead:
         return wf_frequency_missing(w, lang, minimum=get_wf_min_freq(lang))
@@ -1346,11 +1375,13 @@ def main(args: argparse.Namespace) -> None:
             assert not np.isnan(logf).any()
             if np.isinf(logf).any():
                 raise Exception(
-                    f'logf contains a +-inf: smoothing (--smooth) may be necessary.\n'
+                    f'logf contains a +-inf: smoothing or clipping (--smooth, '
+                    f'--eps-clip) may be required.\n\n'
                     f'Diagnostics:\n'
                     f' - 0 in raw measure values: {(f == 0).any()}\n'
                     f' - measure:                 {args.measure}\n'
                     f' - smooth:                  {args.smooth}\n'
+                    f' - eps_clip:                {args.eps_clip}\n'
                     f' - log_measure:             {args.log_measure}\n'
                     )
             c = np.array(gold) if gold else None

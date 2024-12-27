@@ -14,6 +14,8 @@ import os
 
 CHECK_CASE = False
 
+NP_EPS = np.finfo(float).eps
+
 class CounterDict(dict):
     '''
     Like defaultdict, but doesn't insert missing values, behaving similar to Counter.
@@ -382,24 +384,37 @@ class FrequencyData(NamedTuple):
             not count_w                                 # missing
             )
 
-    def smooth_cat_frequencies_missing(self, word: str) -> tuple[np.array, np.array]:
-        '''
-        Return a pair of vectors (size=#categories):
-        - non-zero floats: frequencies smoothed out for missing values,
-        - bools: whether the word is missing.
+    # TODO UNUSED:
+    # def smooth_cat_frequencies_missing(self, word: str) -> tuple[np.array, np.array]:
+    #     '''
+    #     Return a pair of vectors (size=#categories):
+    #     - non-zero floats: frequencies smoothed out for missing values,
+    #     - bools: whether the word is missing.
+    #
+    #                             count(w) + 1
+    #     smooth_frequency(w) = ----------------
+    #                           #tokens + #types
+    #
+    #     Note: #types counted in the whole corpus, not per category!
+    #     '''
+    #     f  = self.cat_f
+    #     count_w = f[word]
+    #     return (
+    #         (count_w + 1) / (self.cat_f_totals + len(f)),   # smooth_frequency
+    #         count_w == 0                                    # missing
+    #         )
 
-                                count(w) + 1
-        smooth_frequency(w) = ----------------
-                              #tokens + #types
-
-        Note: #types counted in the whole corpus, not per category!
+    def simple_smooth_cat_frequencies(self, word: str) -> tuple[np.array, np.array]:
         '''
-        f  = self.cat_f
-        count_w = f[word]
-        return (
-            (count_w + 1) / (self.cat_f_totals + len(f)),   # smooth_frequency
-            count_w == 0                                    # missing
-            )
+        Return non-zero floats: frequencies smoothed out for missing values,
+
+                              count(w) + 1
+        smooth_frequency(w) = ------------
+                              #tokens + 1
+
+        Note: This is NOT Laplace smoothing.
+        '''
+        return (self.cat_f[word] + 1) / (self.cat_f_totals + 1)
 
     # All of the following are defined so that:
     # - Values fall in [0, 1]
@@ -442,7 +457,9 @@ class FrequencyData(NamedTuple):
             ((self.cat_f[word] != 0) * cat_f_totals).sum() / cat_f_totals.sum()
             )
 
-    def gini_dispersion(self, word: str, smooth: bool = False) -> float:
+    def gini_dispersion(
+        self, word: str, smooth: bool = False, weight: bool = False
+        ) -> float:
         '''
         This is Gini *dispersion* (i.e. equality), i.e. the complement of
         the Gini inequality index.
@@ -454,7 +471,7 @@ class FrequencyData(NamedTuple):
         '''
 
         if smooth:
-            f_w = self.smooth_cat_frequencies_missing(word)[0]
+            f_w = self.simple_smooth_cat_frequencies(word)
         else:
             f = self.cat_f
             if word not in f:
@@ -474,11 +491,16 @@ class FrequencyData(NamedTuple):
         # which is == 1 after the normalization by word.
         # Note that we are returning complement (1 - Gini inequality), i.e. index
         # of dispersion
+        if weight:
+            w = as_rows * as_cols
+            d = np.abs(as_rows - as_cols)
+            return 1 - (w * d).sum() / (2 * n)
+
         return 1 - np.abs(as_rows - as_cols).sum() / (2 * n)
 
     def maxmin_dispersion(self, word: str, smooth: bool = False) -> float:
         if smooth:
-            f_w = self.smooth_cat_frequencies_missing(word)[0]
+            f_w = self.simple_smooth_cat_frequencies(word)
         else:
             f = self.cat_f
             if word not in f:
@@ -488,11 +510,28 @@ class FrequencyData(NamedTuple):
         # Do not normalize by word, max - min is already in 0..1:
         return 1 - (f_w.max() - f_w.min())  # 1 - maxmin
 
+    def ada(self, word: str, smooth: bool = False) -> float:
+        # Wilcox's ADA (analog of the average or mean deviation):
+        if smooth:
+            f_w = self.simple_smooth_cat_frequencies(word)
+        else:
+            f = self.cat_f
+            if word not in f:
+                return 0.0                              # no dispersion
+            f_w = f[word] / self.cat_f_totals           # normalize by category
+
+        f_w /= f_w.sum()    # Normalize by word
+
+        # p. 328 of Wilcox's paper (our f_w is normalized to sum to 1)
+        return 1 - (
+            np.sum(np.abs(f_w - 1/len(f_w))) / 2
+            )
+
     def juilland_d(self, word: str, smooth: bool = False) -> float:
         # ~ variation coefficient
 
         if smooth:
-            f_w = self.smooth_cat_frequencies_missing(word)[0]
+            f_w = self.simple_smooth_cat_frequencies(word)
         else:
             f = self.cat_f
             if word not in f:
@@ -508,7 +547,7 @@ class FrequencyData(NamedTuple):
         # variance-to-mean ratio (VMR)
 
         if smooth:
-            f_w = self.smooth_cat_frequencies_missing(word)[0]
+            f_w = self.simple_smooth_cat_frequencies(word)
         else:
             f = self.cat_f
             if word not in f:
@@ -520,7 +559,17 @@ class FrequencyData(NamedTuple):
         vmr = np.var(f_w) / np.mean(f_w)
         return 1 - vmr
 
-    def gries_dp_dispersion(self, word: str, smooth: bool = False) -> float:
+    def gries_dp_eq_dispersion(
+        self,
+        word: str, smooth: bool = False
+        ) -> float:
+        return self.gries_dp_dispersion(word, smooth, equalize=True)
+
+    def gries_dp_dispersion(
+        self,
+        word: str, smooth: bool = False,
+        equalize: bool = False
+        ) -> float:
         f = self.cat_f
         if not smooth and word not in f:
             return 0.0                                  # no dispersion
@@ -529,19 +578,23 @@ class FrequencyData(NamedTuple):
         f_totals    = self.cat_f_totals
 
         if smooth:
-            # Smoothing as if using smooth_cat_frequencies_missing().
+            # Smoothing as if using simple_smooth_cat_frequencies().
             # Note: Avoid += so that we do not overwrite original values in dict.
             f_w         = f_w + 1
-            f_totals    = f_totals + len(self.cat_f)
+            f_totals    = f_totals + 1
         cat_prop    = f_totals / f_totals.sum()
         word_prop   = f_w / f_w.sum()
+
+        if equalize:
+            # TODO exprimental
+            return 1 - np.sum(np.abs(word_prop - cat_prop) * cat_prop) / 2
 
         # Return 1 - DP (= D_P in Egbert et al.(2020))
         return 1 - np.sum(np.abs(word_prop - cat_prop)) / 2
 
     def rosengren_s(self, word: str, smooth: bool = False) -> float:
         if smooth:
-            f_w = self.smooth_cat_frequencies_missing(word)[0]
+            f_w = self.simple_smooth_cat_frequencies(word)
         else:
             f = self.cat_f
             if word not in f:
@@ -553,9 +606,24 @@ class FrequencyData(NamedTuple):
         f_w /= f_w.sum()                            # normalize by word
         return np.sqrt(f_w).sum() ** 2 / len(f_w)
 
+    def rosengren_like_sqrt(self, word: str, smooth: bool = False) -> float:
+        if smooth:
+            f_w = self.simple_smooth_cat_frequencies(word)
+        else:
+            f = self.cat_f
+            if word not in f:
+                return 0.0                              # no dispersion
+            f_w = f[word] / self.cat_f_totals           # normalize by category
+
+        # We normalize by word before the final computation, as this will make the
+        # numbers larger, resulting in better precision:
+        f_w /= f_w.sum()                            # normalize by word
+        return np.sqrt(f_w).sum() / len(f_w)    # removed ** 2
+
+
     def carrol_d2(self, word: str, smooth: bool = False) -> float:
         if smooth:
-            f_w = self.smooth_cat_frequencies_missing(word)[0]
+            f_w = self.simple_smooth_cat_frequencies(word)
         else:
             f = self.cat_f
             if word not in f:
