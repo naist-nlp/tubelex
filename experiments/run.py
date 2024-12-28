@@ -1,7 +1,7 @@
 import argparse
 from collections import defaultdict
 from typing import Optional
-from collections.abc import Callable, Container
+from collections.abc import Callable, Container, Sequence
 import sys
 import os
 import re
@@ -15,7 +15,7 @@ from functools import partial
 from typing import NamedTuple, Any
 from tqdm import tqdm
 import scipy
-from sklearn.linear_model import RidgeCV
+from sklearn.linear_model import RidgeCV, LinearRegression
 from sklearn.metrics import (
     mean_squared_error as mse_score, mean_absolute_error as mae_score, r2_score
     )
@@ -75,6 +75,22 @@ CAT_ID2CATEGORY = {
 def pearson_r(x: np.ndarray, y: np.ndarray):
     return np.corrcoef(x, y)[0][1]
 
+def adjusted_r2(
+    xs: Sequence[float] | Sequence[np.ndarray] | np.ndarray,
+    y: np.ndarray
+    ) -> float:
+    # Mordecai Ezekiel (1930) "Methods of correlation analysis"
+    if isinstance(xs, Sequence):
+        # each item is a variable/feature
+        xs = np.stack(xs, axis=-1)
+    if len(xs.shape) == 1:  # xs was a 1D array/simple Sequence
+        xs = xs.reshape(-1, 1)
+    n, p = xs.shape  # #examples, #variables
+    assert n == len(y), (xs.shape, y.shape)
+    linear_regression = LinearRegression().fit(xs, y)
+    r2 = linear_regression.score(xs, y)
+    return 1 - (1 - r2) * (n - 1) / (n - p - 1)
+
 
 DATASET_NAME = 'MLSP2024/MLSP2024'
 LANG2DATASET_ID = {
@@ -87,6 +103,7 @@ LANG2DATASET_ID = {
 class MeasureSpec(NamedTuple):
     function:  Callable[[FrequencyData, str], float]
     params:    dict = dict(categories=True)  # use categories for dispersion by default
+    is_smooth: bool = False
 
     @property
     def can_smooth(self) -> bool:
@@ -109,7 +126,9 @@ class MeasureSpec(NamedTuple):
 
 MEASURE2SPEC = {
     'frequency':            MeasureSpec(lambda fd, w: fd.smooth_frequency_missing(w)[0],
-                                        {}),  # Note: always smooth
+                                        {}, is_smooth=True),  # Note: always smooth
+    'simple_frequency':     MeasureSpec(FrequencyData.simple_smooth_frequency,
+                                        {}, is_smooth=True),  # Note: always smooth
     # range (based on cd):
     'range_videos':         MeasureSpec(FrequencyData.cd_range,
                                         dict(cols=('word', 'count', 'videos'))),
@@ -696,8 +715,13 @@ def parse_args() -> argparse.Namespace:
         '--measure', choices=MEASURE2SPEC, default=None,
         help='Use a specific measure computed from TUBELEX (specifiy log separately)'
         )
-    parser.add_argument(
+    transform = parser.add_mutually_exclusive_group()
+    transform.add_argument(
         '--log-measure', action='store_true',
+        help='Use the logarightm of the specified measure.'
+        )
+    transform.add_argument(
+        '--sqrt-measure', action='store_true',
         help='Use the logarightm of the specified measure.'
         )
 
@@ -709,6 +733,10 @@ def parse_args() -> argparse.Namespace:
     smooth_clip.add_argument(
         '--eps-clip', action='store_true',
         help='Clip the specified measure to values >= epsilon.'
+        )
+    smooth_clip.add_argument(
+        '--zero-clip', action='store_true',
+        help='Clip the specified measure to values >= 0.'
         )
     parser.add_argument(
         '--weight', action='store_true',
@@ -1042,12 +1070,19 @@ def main(args: argparse.Namespace) -> None:
         assert args.tubelex, '--measure requires --tubelex'
         measure = MEASURE2SPEC[args.measure]
     log_measure = args.log_measure
+    sqrt_measure = args.sqrt_measure
     smooth      = args.smooth
     weight      = args.weight
     eps_clip    = args.eps_clip
+    zero_clip   = args.zero_clip
     assert measure or not log_measure, '--log-measure requires --measure'
-    assert measure or not (smooth or eps_clip), '--smooth/--eps-clip require --measure'
+    assert measure or not sqrt_measure, '--sqrt-measure requires --measure'
+    assert measure or not (
+        smooth or eps_clip or zero_clip
+        ), 'clipping/smoothing requires --measure'
     assert measure or not weight, '--weight require --measure'
+    if smooth and measure.is_smooth:
+        smooth = False      # ignore for measures that are already smooth
     if smooth and not measure.can_smooth:
         raise Exception('The specified measure does not support smoothing.')
     if weight and not measure.can_weight:
@@ -1236,6 +1271,8 @@ def main(args: argparse.Namespace) -> None:
                 f = measure(freq_data, w, smooth=smooth, weight=weight)
                 if eps_clip:
                     f = max(NP_EPS, f)
+                elif zero_clip:
+                    f = max(0, f)
                 return (f, False)   # TODO: We assume not missing
             return freq_data.smooth_frequency_missing(w)
         # We cannot smooth frequencies from wordfreq, so we use minimum instead:
@@ -1270,7 +1307,7 @@ def main(args: argparse.Namespace) -> None:
 
     if correlation:
         print(
-            f'file\tlanguage\tcorrelation\tcorr_{cached}\t'
+            f'file\tlanguage\tcorrelation\tadjusted_r2\tcorr_{cached}\t'
             f'n\tn_missing\tcorr_without_missing'
             )
     elif not train and args.metrics:
@@ -1367,39 +1404,41 @@ def main(args: argparse.Namespace) -> None:
                 )
             f_valid = ~np.array(missing, dtype=bool)
             logf = (
-                (np.log10(f) if log_measure else f) if (measure is not None) else
+                (
+                    np.log10(f) if log_measure else
+                    np.sqrt(f) if sqrt_measure else f
+                    ) if (measure is not None) else
                 (-f) if args.minus else
                 (-np.log10(f)) if args.minus_log else
                 np.log10(f)
                 )
-            assert not np.isnan(logf).any()
-            if np.isinf(logf).any():
+            has_nan = np.isnan(logf).any()
+            if has_nan or np.isinf(logf).any():
+                contains = 'nan' if has_nan else '+-inf'
                 raise Exception(
-                    f'logf contains a +-inf: smoothing or clipping (--smooth, '
-                    f'--eps-clip) may be required.\n\n'
+                    f'logf contains a {contains}: smoothing or clipping (--smooth, '
+                    f'--eps-clip, --zero-clip) may be required.\n\n'
                     f'Diagnostics:\n'
-                    f' - 0 in raw measure values: {(f == 0).any()}\n'
-                    f' - measure:                 {args.measure}\n'
-                    f' - smooth:                  {args.smooth}\n'
-                    f' - eps_clip:                {args.eps_clip}\n'
-                    f' - log_measure:             {args.log_measure}\n'
+                    f' - min raw measure value:    {f.min()}\n'
+                    f' - 0 in raw measure values:  {(f == 0).any()}\n'
+                    f' - measure:                  {args.measure}\n'
+                    f' - smooth:                   {args.smooth}\n'
+                    f' - eps_clip:                 {args.eps_clip}\n'
+                    f' - zero_clip:                 {args.eps_clip}\n'
+                    f' - log_measure:              {args.log_measure}\n'
+                    f' - sqrt_measure:             {args.sqrt_measure}\n'
                     )
             c = np.array(gold) if gold else None
 
             if correlation:
                 assert c is not None
 
-                cache_name = (
-                    f'{cached}-{lang}-'
-                    ) + (
+                cache_name = f'{cached}-{lang}-' + (
                     'mlsp' if mlsp_subsets else
                     'ldt' if ldt_langs else
                     'fam')
                 if args.measure is not None:
-                    m_name = args.measure
-                    if log_measure:
-                        m_name = 'log_' + m_name
-                    cache_name = f'{m_name}-{cache_name}'
+                    cache_name = f'measure-{cache_name}'
                 if ldt_langs:
                     if args.zscore:
                         cache_name += '.zscore'
@@ -1439,12 +1478,13 @@ def main(args: argparse.Namespace) -> None:
                             logf_cached = np.full_like(logf, np.nan)
 
                 r = pearson_r(logf, c)
+                r2_adj = adjusted_r2((logf, logf_cached), c)
                 r_cached = pearson_r(logf, logf_cached)
                 n = len(logf)
                 n_missing = sum(missing)
                 r_valid = pearson_r(logf[f_valid], c[f_valid])
                 print(
-                    f'{input_id}\t{LANG2FULL_NAME[lang]}\t{r}\t{r_cached}\t'
+                    f'{input_id}\t{LANG2FULL_NAME[lang]}\t{r}\t{r2_adj}\t{r_cached}\t'
                     f'{n}\t{n_missing}\t{r_valid}'
                     )
                 for fields, p in zip(data, logf):

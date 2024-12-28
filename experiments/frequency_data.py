@@ -376,6 +376,7 @@ class FrequencyData(NamedTuple):
                                 count(w) + 1
         smooth_frequency(w) = ----------------
                               #tokens + #types
+        (i.e. Laplace smoothing)
         '''
         f  = self.f
         count_w = f[word]
@@ -383,6 +384,17 @@ class FrequencyData(NamedTuple):
             (count_w + 1) / (self.f_total + len(f)),    # smooth_frequency
             not count_w                                 # missing
             )
+
+    def simple_smooth_frequency(self, word: str) -> float:
+        '''
+        Return a non-zero float: frequency smoothed out for missing values:
+
+                              count(w) + 1
+        smooth_frequency(w) = ------------
+                              #tokens + 1
+        Note: This is NOT Laplace smoothing (uncorrected Laplace smoothing)
+        '''
+        return (self.f[word] + 1) / (self.f_total + 1)    # smooth_frequency
 
     # TODO UNUSED:
     # def smooth_cat_frequencies_missing(self, word: str) -> tuple[np.array, np.array]:
@@ -412,7 +424,7 @@ class FrequencyData(NamedTuple):
         smooth_frequency(w) = ------------
                               #tokens + 1
 
-        Note: This is NOT Laplace smoothing.
+        Note: This is NOT Laplace smoothing (uncorrected Laplace smoothing)
         '''
         return (self.cat_f[word] + 1) / (self.cat_f_totals + 1)
 

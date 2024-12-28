@@ -1,3 +1,4 @@
+import argparse
 from collections import defaultdict
 import pandas as pd
 import numpy as np
@@ -45,6 +46,29 @@ CORPUS2ID = {
     'TUBELEX_comedy_R': 'tubelex-comedy-regex',
     }
 
+MEASURES = [
+    'frequency',
+    #'simple_frequency', same as frequency => breaks pvalue computation
+    'range_videos',
+    'range_channels',
+    'range_categories',
+    'weighted_range',
+    'gini',
+    'maxmin',
+    'ada',
+    'juilland_d',
+    'vmr',
+    'gries_dp',
+    'gries_dp_eq',
+    'rosengren_s',
+    'sqrt',
+    'carrol_d2'
+    ]
+TRANSFORMS = ['', 'log_']   # NO IMPROVEMENT: 'sqrt_'
+MEASURE2ID = { # TODO
+    tm: f'tubelex-{tm}' for t in TRANSFORMS for m in MEASURES for tm in (t + m,)
+    }
+
 TASK2NAME = {
     'ldt': 'Decision Time',
     'fam': 'Familiarity',
@@ -52,6 +76,8 @@ TASK2NAME = {
     'fam-alt': 'Familiarity (Alternative Datasets)',
     'mlsp': 'Complexity',
     }
+
+MEASURES_TASKS = ['ldt', 'fam', 'mlsp']
 
 COL2ID = {
     'Pearson\'s r': 'correlation'
@@ -83,36 +109,65 @@ LANG2ALT_DESC = {
     }
 
 
-def main():
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser()
+    action = parser.add_mutually_exclusive_group()
+    action.add_argument('--measures', action='store_true',
+                        help='Aggregate expriments with dispersion measures.')
+    return parser.parse_args()
+
+
+def main(args: argparse.Namespace):
     # Unnecessary:
     # task_name2df = {}
     # task_name2df_p = {}
-    for filename, cols, add_mlsp, task in (
-        ('experiments/mlsp-results', ['R2', 'Pearson\'s r'], True, None),
-        *((
-            f'experiments/{task}-corr',
-            ['correlation',
-             'corr_gini' if task == 'fam-c-gini' else 'corr_tubelex',
-             'n', 'n_missing',
-             'corr_without_missing'
-             ],
-            False,
-            task
-            ) for task in TASK2NAME)
+
+    if args.measures:
+        data_to_aggregate = (
+            # TODO ('experiments/mlsp-results', ['R2', 'Pearson\'s r'], True, None),
+            *((
+                f'experiments/measures-{task}-corr',
+                ['correlation',
+                 'adjusted_r2',
+                 'corr_tubelex',
+                 'n', 'n_missing',
+                 'corr_without_missing'
+                 ],
+                False,
+                task
+                ) for task in MEASURES_TASKS),
+            )
+        method2id = MEASURE2ID
+    else:
+        data_to_aggregate = (
+            ('experiments/mlsp-results', ['R2', 'Pearson\'s r'], True, None),
+            *((
+                f'experiments/{task}-corr',
+                ['correlation',
+                 'corr_gini' if task == 'fam-c-gini' else 'corr_tubelex',
+                 'n', 'n_missing',
+                 'corr_without_missing'
+                 ],
+                False,
+                task
+                ) for task in TASK2NAME)
             # Exclude 'ldtz' (LDT z-scores) : we have z-scores only for en and zh, and
             # the results are basically the same as for means ('ldt').
-            ):
+            )
+        method2id = CORPUS2ID
+
+    for filename, cols, add_mlsp, task in data_to_aggregate:
 
         d = defaultdict(dict)
 
-        for corpus, corpus_id in CORPUS2ID.items():
-            path = f'{filename}-{corpus_id}.tsv'
+        for method, method_id in method2id.items():
+            path = f'{filename}-{method_id}.tsv'
             if os.path.exists(path):
                 print(f'Reading {path}')
                 df = pd.read_table(path, index_col='language')
                 for col in cols:
                     if col in df:
-                        d[col][corpus] = df[col]
+                        d[col][method] = df[col]
 
         if add_mlsp:
             for col in cols:
@@ -141,9 +196,12 @@ def main():
         if 'correlation' in cols:
             if 'corr_tubelex' in cols:
                 corr2_col = 'corr_tubelex'
-                corp2 = TUBELEX
+                if args.measures:
+                    corp2 = 'log_frequency'
+                else:
+                    corp2 = TUBELEX
             else:
-                assert 'corr_gini' in cols
+                assert 'corr_gini' in cols, (filename, cols)
                 corr2_col = 'corr_gini'
                 corp2 = GINI
             r_task_corp     = combined_dfs['correlation']
@@ -181,4 +239,4 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    main(parse_args())
