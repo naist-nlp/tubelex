@@ -14,6 +14,9 @@ import lzma
 import argparse
 import sys
 
+import numpy as np
+import pandas as pd
+
 NORMALIZED_SUFFIX_FNS = (
     (False, '', None),
     (True, '-lower', lambda w: w.lower()),
@@ -133,16 +136,20 @@ class WordCounter:
     True
     '''
     __slots__ = ('word_count', 'cat2word_count', 'word_docn', 'word_channels',
-                 'word_pos', 'doc_words')
+                 'word_pos', 'doc_words', 'word2doc_count', 'word2channel_count')
     word_count: Counter[str]
     cat2word_count: Optional[dict[str, Counter[str]]]
     word_docn: Counter[str]                                     # documents or videos
     word_channels: Optional[dict[str, set[Union[int, str]]]]    # for tubelex (YouTube)
     word_pos: Optional[dict[str, Counter[str]]]      # optional, for tubelex (YouTube)
     doc_words: set[str]                                         # words in current doc
+    word2doc_count: Optional[dict[str, np.ndarray]]  # array indices are docs
+    word2channel_count: Optional[dict[str, np.ndarray]]  # array indices are channels
 
     def __init__(self,
-                 channels: bool = False, pos: bool = False, categories: bool = False
+                 channels: bool = False, pos: bool = False, categories: bool = False,
+                 count_in_docs: int | None = None,
+                 count_in_channels: int | None = None
                  ):
         super().__init__()
         self.word_count     = Counter()
@@ -151,6 +158,13 @@ class WordCounter:
         self.word_channels  = defaultdict(set) if channels else None
         self.word_pos       = defaultdict(Counter) if pos else None
         self.doc_words      = set()
+        self.doc_n          = 0
+        self.word2doc_count = defaultdict(
+            lambda: np.zeros(count_in_docs, dtype=int)
+            ) if count_in_docs else None
+        self.word2channel_count = defaultdict(
+            lambda: np.zeros(count_in_channels, dtype=int)
+            ) if count_in_channels else None
 
     def __eq__(self, other):
         return (
@@ -159,7 +173,9 @@ class WordCounter:
             self.word_docn == other.word_docn and
             self.word_channels == other.word_channels and
             self.word_pos == other.word_pos and
-            self.doc_words == self.doc_words
+            self.doc_words == other.doc_words and
+            self.word2doc_count == other.word2doc_count and
+            self.word2channel_count == other.word2channel_count
             )
 
     def add(
@@ -178,13 +194,21 @@ class WordCounter:
             self.cat2word_count[category] if (category is not None) else
             None
             )
+        wc = self.word_channels
+        w2dc = self.word2doc_count
+        w2cc = self.word2channel_count
+        doc_n = self.doc_n
         for w in words:
             self.word_count[w] += 1
             self.doc_words.add(w)
-            if self.word_channels is not None:
-                self.word_channels[w].add(channel_id)  # type: ignore
+            if wc is not None:
+                wc[w].add(channel_id)  # type: ignore
             if cat_word_count is not None:
                 cat_word_count[w] += 1
+            if w2dc is not None:
+                w2dc[w][channel_id] += 1
+            if w2cc is not None:
+                w2cc[w][doc_n] += 1
 
     def add_pos(
         self,
@@ -202,16 +226,25 @@ class WordCounter:
             self.cat2word_count[category] if (category is not None) else
             None
             )
+        wc = self.word_channels
+        w2dc = self.word2doc_count
+        w2cc = self.word2channel_count
+        doc_n = self.doc_n
         for w, p in words_pos:
             self.word_count[w] += 1
             self.word_pos[w][p] += 1
             self.doc_words.add(w)
-            if self.word_channels is not None:
-                self.word_channels[w].add(channel_id)  # type: ignore
+            if wc is not None:
+                wc[w].add(channel_id)  # type: ignore
             if cat_word_count is not None:
                 cat_word_count[w] += 1
+            if w2dc is not None:
+                w2dc[w][channel_id] += 1
+            if w2cc is not None:
+                w2cc[w][doc_n] += 1
 
     def close_doc(self):
+        self.doc_n += 1
         self.word_docn.update(self.doc_words)
         self.doc_words = set()
 
@@ -366,21 +399,41 @@ class WordCounter:
             *(wc.total() for wc in cat_w_counts)
             ))
 
+    def dump_optional_counts(
+        self,
+        f: TextIO,
+        channels: bool = False,  # docs or channels
+        sep: str = '\t'
+        ):
+        data = self.word2channel_count if channels else self.word2doc_count
+        pd.DataFrame(data).to_csv(f, sep=sep)
+
 
 class WordCounterGroup(dict[str, WordCounter]):
-    __slots__ = ('n_words', 'n_docs')
+    __slots__ = ('n_words', 'n_docs', 'count_in_docs', 'count_in_channels')
     n_words: int
     n_docs: int
+    count_in_docs: int | None
+    count_in_channels: int | None
 
-    def __init__(self, normalize: bool, channels: bool = False, pos: bool = False,
-                 categories: bool = False):
+    def __init__(
+        self, normalize: bool, channels: bool = False, pos: bool = False,
+        categories: bool = False,
+        count_in_docs: int | None = None,
+        count_in_channels: int | None = None
+        ):
         super().__init__((
-            (suffix, WordCounter(channels=channels, pos=pos, categories=categories))
+            (suffix, WordCounter(
+                channels=channels, pos=pos, categories=categories,
+                count_in_docs=count_in_docs, count_in_channels=count_in_channels
+                ))
             for normalized, suffix, __ in NORMALIZED_SUFFIX_FNS
             if normalize or not normalized
             ))
         self.n_words = 0
         self.n_docs = 0
+        self.count_in_docs = count_in_docs
+        self.count_in_channels = count_in_channels
 
     def add(
         self,
@@ -454,9 +507,20 @@ class WordCounterGroup(dict[str, WordCounter]):
         totals = [self.n_words, n_docs]
         if n_channels is not None:
             totals.append(n_channels)
-        for suffix, c in self.items():
-            with storage.open(
-                path_pattern.replace('%', suffix),  # no effect if not do_norm (no '%')
-                'wt'
-                ) as f:
-                c.dump(f, cols, totals)
+        dump_opt_suffix_channels = [('', False)]
+        if self.count_in_docs:
+            dump_opt_suffix_channels.append(('_videos', False))
+        if self.count_in_channels:
+            dump_opt_suffix_channels.append(('_channels', True))
+
+        for norm_suffix, c in self.items():
+            for opt_suffix, channels in dump_opt_suffix_channels:
+                with storage.open(
+                    # replace has no effect if not do_norm (no '%'):
+                    path_pattern.replace('%', norm_suffix + opt_suffix),
+                    'wt'
+                    ) as f:
+                    if not opt_suffix:
+                        c.dump(f, cols, totals)
+                    else:
+                        c.dump_optional_counts(f, channels)

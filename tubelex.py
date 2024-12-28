@@ -343,6 +343,10 @@ def parse() -> argparse.Namespace:
         '--no-categories', action='store_false', dest='categories',
         help='Do not add video categories'
         )
+    parser.add_argument(
+        '--all-counts', '-a', action='store_true',
+        help='Count per-video and per-channel occurrences'
+        )
 
     parser.add_argument(
         '--min-videos', type=int, default=DEFAULT_MIN_VIDEOS, help=(
@@ -902,6 +906,7 @@ def do_frequencies(
     tokenized_files: Optional[str],
     tokenize: Optional[Tokenizer],
     categories: bool,
+    all_counts: bool,
     pos_tag: Optional[TokenizerTagger],
     filter_cc_descriptions: bool,
     start_index: Optional[int],
@@ -942,6 +947,10 @@ def do_frequencies(
         if categories:
             cat2id  = {cat: cat_id for cat_id, cat in CAT_ID2CATEGORY.items()}
             cat_ids = sublist['categories'].apply(cat2id.__getitem__)
+
+        if all_counts:
+            assert not n_no_channel
+            channel_ids = pd.Categorical(channel_ids).codes  # ints instead of str IDs
     else:
         # Only warn and fall back to not outputting categories:
         sys.stderr.write('Cannot count frequencies by category, missing sublist.\n')
@@ -949,6 +958,7 @@ def do_frequencies(
 
         channel_ids = None
         n_channels_and_no_channels = None
+        assert not all_counts
 
     freq_path: str  = path or ((DEFAULT_FREQ_PATH_FMT % identifier) + storage.suffix)
     normalize       = '%' in freq_path
@@ -957,7 +967,9 @@ def do_frequencies(
         normalize=normalize,
         channels=(channel_ids is not None),
         pos=(pos_tag is not None),
-        categories=categories
+        categories=categories,
+        count_in_docs=(len(sublist) if all_counts else None),
+        count_in_channels=(n_channels_and_no_channels if all_counts else None)
         )
     replaced_counter = Counter()
     removed_addresses = defaultdict(list)
@@ -1407,6 +1419,7 @@ def main() -> None:
     frequencies = args.frequencies
     with_pos = args.pos
     categories = args.categories
+    all_counts = args.all_counts
     tokenized_files = args.tokenized_files
     limit_categories = args.limit_categories
 
@@ -1530,6 +1543,7 @@ def main() -> None:
                 hkust=args.hkust_mtsc,
                 tokenize=tokenize,
                 categories=categories,
+                all_counts=all_counts,
                 pos_tag=pos_tag,
                 filter_cc_descriptions=args.filter_cc_descriptions,  # TODO TODO ignored
                 start_index=start_index,
