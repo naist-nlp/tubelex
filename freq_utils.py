@@ -5,7 +5,7 @@ Word frequency counting for `tubelex` and `wikipedia-word-frequency-clean`.
 from typing import Optional, Union, TextIO
 from unicodedata import normalize as unicode_normalize
 from collections import Counter, defaultdict
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Sequence, Callable
 from enum import Enum
 from zipfile import ZIP_DEFLATED, ZIP_BZIP2, ZIP_LZMA
 import gzip
@@ -23,6 +23,27 @@ NORMALIZED_SUFFIX_FNS = (
     (True, '-nfkc', lambda w: unicode_normalize('NFKC', w)),
     (True, '-nfkc-lower', lambda w: unicode_normalize('NFKC', w).lower())
     )
+
+
+def normalize2normalized_suffix_fns(
+    normalize: bool | str
+    ) -> tuple[bool, str, Callable[[str], str] | None]:
+    if normalize:
+        normalize_suffix = f'-{normalize}'
+        if isinstance(normalize, str):
+            nsfs = [nsf for nsf in NORMALIZED_SUFFIX_FNS if nsf[1] == normalize_suffix]
+            if not nsfs:
+                raise Exception(f'Not a valid normalization: {normalize}.')
+            assert len(nsfs) == 1
+            return tuple(nsfs)
+        else:
+            return NORMALIZED_SUFFIX_FNS
+    else:
+        do_not_normalize = NORMALIZED_SUFFIX_FNS[0]
+        assert not do_not_normalize[0]
+        return (do_not_normalize,)
+
+
 TOTAL_LABEL = '[TOTAL]'
 
 DEFAULT_MARKUP = (
@@ -136,7 +157,9 @@ class WordCounter:
     True
     '''
     __slots__ = ('word_count', 'cat2word_count', 'word_docn', 'word_channels',
-                 'word_pos', 'doc_words', 'word2doc_count', 'word2channel_count')
+                 'word_pos', 'doc_words', 'word2doc_count', 'word2channel_count',
+                 'doc_n'
+                 )
     word_count: Counter[str]
     cat2word_count: Optional[dict[str, Counter[str]]]
     word_docn: Counter[str]                                     # documents or videos
@@ -145,6 +168,7 @@ class WordCounter:
     doc_words: set[str]                                         # words in current doc
     word2doc_count: Optional[dict[str, np.ndarray]]  # array indices are docs
     word2channel_count: Optional[dict[str, np.ndarray]]  # array indices are channels
+    doc_n: int
 
     def __init__(self,
                  channels: bool = False, pos: bool = False, categories: bool = False,
@@ -158,13 +182,15 @@ class WordCounter:
         self.word_channels  = defaultdict(set) if channels else None
         self.word_pos       = defaultdict(Counter) if pos else None
         self.doc_words      = set()
-        self.doc_n          = 0
+        # Save space by using int32. We do not expect any word to occur more than
+        # 2^31-1 == 2,147,483,647 (2G) times in a single channel.
         self.word2doc_count = defaultdict(
-            lambda: np.zeros(count_in_docs, dtype=int)
+            lambda: np.zeros(count_in_docs, dtype='int32')
             ) if count_in_docs else None
         self.word2channel_count = defaultdict(
-            lambda: np.zeros(count_in_channels, dtype=int)
+            lambda: np.zeros(count_in_channels, dtype='int32')
             ) if count_in_channels else None
+        self.doc_n = 0
 
     def __eq__(self, other):
         return (
@@ -206,9 +232,9 @@ class WordCounter:
             if cat_word_count is not None:
                 cat_word_count[w] += 1
             if w2dc is not None:
-                w2dc[w][channel_id] += 1
+                w2dc[w][doc_n] += 1
             if w2cc is not None:
-                w2cc[w][doc_n] += 1
+                w2cc[w][channel_id] += 1
 
     def add_pos(
         self,
@@ -406,7 +432,7 @@ class WordCounter:
         sep: str = '\t'
         ):
         data = self.word2channel_count if channels else self.word2doc_count
-        pd.DataFrame(data).to_csv(f, sep=sep)
+        pd.DataFrame(data).T.to_csv(f, sep=sep)
 
 
 class WordCounterGroup(dict[str, WordCounter]):
@@ -417,7 +443,9 @@ class WordCounterGroup(dict[str, WordCounter]):
     count_in_channels: int | None
 
     def __init__(
-        self, normalize: bool, channels: bool = False, pos: bool = False,
+        self,
+        normalize: bool | str,  # may be 'lower', 'nfkc' or 'nfkc-lower'
+        channels: bool = False, pos: bool = False,
         categories: bool = False,
         count_in_docs: int | None = None,
         count_in_channels: int | None = None
@@ -427,8 +455,7 @@ class WordCounterGroup(dict[str, WordCounter]):
                 channels=channels, pos=pos, categories=categories,
                 count_in_docs=count_in_docs, count_in_channels=count_in_channels
                 ))
-            for normalized, suffix, __ in NORMALIZED_SUFFIX_FNS
-            if normalize or not normalized
+            for normalized, suffix, __ in normalize2normalized_suffix_fns(normalize)
             ))
         self.n_words = 0
         self.n_docs = 0

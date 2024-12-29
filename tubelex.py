@@ -347,6 +347,10 @@ def parse() -> argparse.Namespace:
         '--all-counts', '-a', action='store_true',
         help='Count per-video and per-channel occurrences'
         )
+    parser.add_argument(
+        '--normalize', '-n', type=str, default=None,
+        help='Do only one type of normalization (e.g. "nfkc-lower")'
+        )
 
     parser.add_argument(
         '--min-videos', type=int, default=DEFAULT_MIN_VIDEOS, help=(
@@ -907,6 +911,7 @@ def do_frequencies(
     tokenize: Optional[Tokenizer],
     categories: bool,
     all_counts: bool,
+    normalize: Optional[str],
     pos_tag: Optional[TokenizerTagger],
     filter_cc_descriptions: bool,
     start_index: Optional[int],
@@ -950,7 +955,10 @@ def do_frequencies(
 
         if all_counts:
             assert not n_no_channel
-            channel_ids = pd.Categorical(channel_ids).codes  # ints instead of str IDs
+            channel_ids = pd.Series(
+                pd.Categorical(channel_ids).codes,  # ints instead of str IDs
+                index=channel_ids.index
+                )
     else:
         # Only warn and fall back to not outputting categories:
         sys.stderr.write('Cannot count frequencies by category, missing sublist.\n')
@@ -958,21 +966,17 @@ def do_frequencies(
 
         channel_ids = None
         n_channels_and_no_channels = None
-        assert not all_counts
+        if all_counts:
+            raise Exception(
+                'Cannot do --all-counts without a subtitle list (--list).'
+                )
 
     freq_path: str  = path or ((DEFAULT_FREQ_PATH_FMT % identifier) + storage.suffix)
-    normalize       = '%' in freq_path
-
-    counters = WordCounterGroup(
-        normalize=normalize,
-        channels=(channel_ids is not None),
-        pos=(pos_tag is not None),
-        categories=categories,
-        count_in_docs=(len(sublist) if all_counts else None),
-        count_in_channels=(n_channels_and_no_channels if all_counts else None)
-        )
-    replaced_counter = Counter()
-    removed_addresses = defaultdict(list)
+    should_normalize = '%' in freq_path
+    if normalize is not None:
+        assert should_normalize
+    else:
+        normalize = should_normalize
 
     with get_files_contents(
         tokenized_files or (UNIQUE_PATH_FMT % identifier),
@@ -984,6 +988,27 @@ def do_frequencies(
         files, iter_contents = files_contents
         n_videos = len(files[start_index:stop_index])
         assert n_videos, 'Something went wrong, no subtitles found.'
+
+        if all_counts:
+            assert sublist is not None
+            assert not n_no_channel
+            actual_vids = [file.removesuffix(DATA_SUFFIX) for file in files]
+            actual_cids = channel_ids.loc[actual_vids]
+            channel_ids = pd.Series(
+                # ints instead of str IDs AND only for the actual videos:
+                pd.Categorical(actual_cids).codes, index=actual_cids.index
+                )
+        counters = WordCounterGroup(
+            normalize=normalize,
+            channels=(channel_ids is not None),
+            pos=(pos_tag is not None),
+            categories=categories,
+            count_in_docs=(n_videos if all_counts else None),
+            count_in_channels=(n_channels_and_no_channels if all_counts else None)
+            )
+        replaced_counter = Counter()
+        removed_addresses = defaultdict(list)
+
         for video_no, (file, text) in tqdm(
             desc='Computing frequencies',
             iterable=enumerate(zip(files[start_index:stop_index],
@@ -995,7 +1020,7 @@ def do_frequencies(
 
             # Videos without a channel id are counted as unique 1-video channels:
             channel_id = (
-                (channel_ids.loc[video_id] or video_no)
+                channel_ids.get(video_id, video_no)
                 if (channel_ids is not None) else None
                 )
             # Category ID:
@@ -1544,6 +1569,7 @@ def main() -> None:
                 tokenize=tokenize,
                 categories=categories,
                 all_counts=all_counts,
+                normalize=args.normalize,
                 pos_tag=pos_tag,
                 filter_cc_descriptions=args.filter_cc_descriptions,  # TODO TODO ignored
                 start_index=start_index,
