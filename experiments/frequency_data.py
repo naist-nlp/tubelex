@@ -5,16 +5,20 @@ from typing import TextIO, TypedDict, Union, ContextManager
 from collections import Counter
 from collections.abc import Sequence, Iterator
 from urllib.request import urlretrieve
-import numpy as np
+import pickle
 import lzma
 import gzip
 import io
 import sys
 import os
+import numpy as np
+import pandas as pd
+import scipy as sp
 
 CHECK_CASE = False
 
 NP_EPS = np.finfo(float).eps
+
 
 class CounterDict(dict):
     '''
@@ -190,13 +194,96 @@ def _total_from_header(line: str, label: Optional[str] = None) -> int:
 _fd_cache: dict[tuple[str, str], 'FrequencyData'] = {}
 
 
+class NoCountsType:
+    _singleton = None
+
+    def __new__(cls):
+        if cls._singleton is None:
+            cls._singleton = super().__new__(cls)
+        return cls._singleton
+
+
+NoCounts = NoCountsType()
+
+
+class CountArrays:
+    # Data has units as columns, words as rows:
+    data: pd.DataFrame      # columns are pd.arrays.SparseArray
+    cache: dict[str, Optional[pd.arrays.SparseArray]]
+    cache_updated: bool
+    cache_filename: Optional[str]
+    totals: pd.arrays.SparseArray
+    units: int
+    zeros: pd.arrays.SparseArray
+
+    def __init__(
+        self,
+        filename: str,
+        cache: Optional[str]
+        ):
+        with open(filename, 'rb') as f:
+            self.data = pickle.load(f)
+        self.units = len(self.data.columns)
+        self.zeros = pd.arrays.SparseArray(np.zeros(self.units, dtype='int32'))
+        self.cache_filename = cache
+        if cache is not None and os.path.exists(cache):
+            with open(cache, 'rb') as cf:
+                self.cache = pickle.load(cf)
+            self.totals = self.cache.get(TOTAL_KEY)
+        else:
+            self.cache = {}
+            self.totals = None
+        assert self.cache is not None
+        self.cache_updated = False
+        if self.totals is None:
+            self.totals = self.data.sum().array
+            self.cache[TOTAL_KEY] = self.totals
+            self.cache_updated = True
+
+    def get(self, word, default=None):
+        # Return `default` (None) if word is not found.
+        # We cache missing words too (NoCounts)
+        counts = self.cache.get(word)
+
+        if counts is NoCounts:
+            return None
+        if counts is None:
+            try:
+                counts = self.data.loc[word].array
+            except KeyError:
+                self.cache[word] = NoCounts
+                self.cache_updated = True
+                return None
+            self.cache[word] = counts
+            self.cache_updated = True
+        return counts
+
+    def __getitem__(self, word: str) -> pd.arrays.SparseArray:
+        # Return zeros if word is not found.
+        if (counts := self.get(word)) is None:
+            return self.zeros
+        return counts
+
+    def __contains__(self, word: str) -> bool:
+        return self.get(word) is not None
+
+    def save_cache(self) -> None:
+        if self.cache_filename is not None and self.cache_updated:
+            with open(self.cache_filename, 'wb') as cf:
+                pickle.dump(self.cache, cf)
+            self.cache_updated = False
+
+
 class FrequencyData(NamedTuple):
     f: Counter[str]               # frequency
     cd: Optional[Counter[str]]    # contextual diversity (document frequency)
     f_total: int
     cd_total: Optional[int] = None
-    cat_f: Optional[dict[str, list[int]]] = None
-    cat_f_totals: Optional[list[int]] = None
+    # Categories/counts:
+    cnt_f: CounterDict | CountArrays | None = None      # CountArrays are sparse
+    cnt_f_totals: list[int] | np.ndarray | None = None  # cnt_f_totals is always dense
+    # Cumulative sum of cnt_f_totals sorted descending:
+    cs_cnt_f_totals: np.ndarray | None = None
 
     @staticmethod
     def load(
@@ -209,6 +296,7 @@ class FrequencyData(NamedTuple):
         delimiter: str = DEFAULT_DELIMITER,
         cased: bool = False,
         to_lower: bool = False,
+        counts: Optional[CountArrays] = None,
         categories: bool = False,
         categories_as_cd: bool = False,
         verbose: bool = False,
@@ -232,7 +320,7 @@ class FrequencyData(NamedTuple):
                     )
             f_total = _total_from_header(next(file), 'Total word count')
             cd_total = _total_from_header(next(file), 'Context number')
-            cat_f_totals = None
+            cnt_f_totals = None
 
         if to_lower and cased:
             raise ValueError(
@@ -254,6 +342,10 @@ class FrequencyData(NamedTuple):
         if (categories or categories_as_cd) and not header:
             raise ValueError(
                 f'{exc_fn}Categories(_as_cd) are True, but header is False.'
+                )
+        if categories and (counts is not None):
+            raise ValueError(
+                f'{exc_fn}Categories are True and counts are not None.'
                 )
 
         indices: Sequence[int] = range(COLS_DEFAULT)
@@ -285,9 +377,8 @@ class FrequencyData(NamedTuple):
             (len(indices) == COLS_DEFAULT) or
             categories_as_cd
             ) else None
-        cat_f = CounterDict(
-            lambda: np.zeros_like(cat_indices)
-            ) if categories else None
+        cnt_f = (CounterDict(lambda: np.zeros_like(cat_indices)) if categories else
+                 None)
 
         freq = None
         for line in file:
@@ -307,13 +398,13 @@ class FrequencyData(NamedTuple):
                 f[word]         += int(freq)
 
                 if cat_indices is not None:
-                    wcat_f = np.array(fields)[cat_indices].astype(int)
+                    wcnt_f = np.array(fields)[cat_indices].astype(int)
                     if categories:
-                        cat_f[word] += wcat_f
+                        cnt_f[word] += wcnt_f
 
                 if cd is not None:
                     wcd = (
-                        (wcat_f != 0).sum() if categories_as_cd else
+                        (wcnt_f != 0).sum() if categories_as_cd else
                         int(*opt_docs)
                         )
                     if to_lower:
@@ -333,11 +424,24 @@ class FrequencyData(NamedTuple):
             f_total         = f.pop(total_key)
             # Works for categories_as_cd too (assuming all categories are non-empty):
             cd_total        = cd.pop(total_key) if (cd is not None) else None
-            cat_f_totals    = cat_f.pop(total_key) if (cat_f is not None) else None
+            cnt_f_totals    = cnt_f.pop(total_key) if categories else None
         elif not total_header:
             f_total         = sum(f.values())
             cd_total        = None
-            cat_f_totals    = None
+            cnt_f_totals    = None
+
+        if counts is not None:
+            cnt_f = counts
+            cnt_f_totals = np.array(counts.totals)
+
+        if cnt_f_totals is not None:
+            # `cnt_f_totals` => cumulative sum s (`cs_cnt_f_totals`):
+            # x = (x[1], x[2], ..., x[n]): sorted descending x[1] >= x[2] >= ... >= x[n]
+            # s = (s[0], s[1], ..., s[n]): s[i] = sum(x[<=i]), note: s[0] = 0
+            cs_cnt_f_totals = np.concatenate((
+                np.zeros(1, dtype=cnt_f_totals.dtype),  # prepend with [0]
+                -np.sort(-cnt_f_totals).cumsum()        # sort descending; cumsum
+                ))
 
         if CHECK_CASE:
             # w.islower() is False for CJK, so we use `w.lower()==w`:
@@ -359,12 +463,13 @@ class FrequencyData(NamedTuple):
             sys.stderr.write(
                 f'- {n_total} words in file{lcase_msg}\n'
                 f'- totals ({total_source}): f={f_total}, cd={cd_total}, '
-                f'cat_f={cat_f_totals}\n'
+                f'cnt_f={cnt_f_totals}\n'
                 )
             if n_ignored_errors:
                 sys.stderr.write(f'- {n_ignored_errors} ignored errors\n')
 
-        fd = FrequencyData(f, cd, f_total, cd_total, cat_f, cat_f_totals)
+        fd = FrequencyData(f, cd, f_total, cd_total, cnt_f,
+                           cnt_f_totals, cs_cnt_f_totals)
         return fd
 
     def smooth_frequency_missing(self, word: str) -> tuple[float, bool]:
@@ -397,7 +502,7 @@ class FrequencyData(NamedTuple):
         return (self.f[word] + 1) / (self.f_total + 1)    # smooth_frequency
 
     # TODO UNUSED:
-    # def smooth_cat_frequencies_missing(self, word: str) -> tuple[np.array, np.array]:
+    # def smooth_cnt_frequencies_missing(self, word: str) -> tuple[np.array, np.array]:
     #     '''
     #     Return a pair of vectors (size=#categories):
     #     - non-zero floats: frequencies smoothed out for missing values,
@@ -409,14 +514,14 @@ class FrequencyData(NamedTuple):
     #
     #     Note: #types counted in the whole corpus, not per category!
     #     '''
-    #     f  = self.cat_f
+    #     f  = self.cnt_f
     #     count_w = f[word]
     #     return (
-    #         (count_w + 1) / (self.cat_f_totals + len(f)),   # smooth_frequency
+    #         (count_w + 1) / (self.cnt_f_totals + len(f)),   # smooth_frequency
     #         count_w == 0                                    # missing
     #         )
 
-    def simple_smooth_cat_frequencies(self, word: str) -> tuple[np.array, np.array]:
+    def simple_smooth_cnt_frequencies(self, word: str) -> tuple[np.array, np.array]:
         '''
         Return non-zero floats: frequencies smoothed out for missing values,
 
@@ -426,7 +531,7 @@ class FrequencyData(NamedTuple):
 
         Note: This is NOT Laplace smoothing (uncorrected Laplace smoothing)
         '''
-        return (self.cat_f[word] + 1) / (self.cat_f_totals + 1)
+        return (self.cnt_f[word] + 1) / (self.cnt_f_totals + 1)
 
     # All of the following are defined so that:
     # - Values fall in [0, 1]
@@ -456,21 +561,90 @@ class FrequencyData(NamedTuple):
             self.cd[word] / self.cd_total               # may be 0 if word not in cd
             )
 
-    def weighted_range(self, word: str, smooth: bool = False) -> float:
+    def range_nofreq(self, word: str, smooth: bool = False) -> float:
         '''
-        Normalized weighted range, only for categories (not based on cd).
+        Normalized range (in 0..1) only for categories/counts (not based on cd),
+        "controlled" for frequency - improves (Gries, 2021).
         '''
-        cat_f_totals = self.cat_f_totals
-        return (
-            (
-                (((self.cat_f[word] != 0) * cat_f_totals).sum() + 1) /
-                (cat_f_totals.sum() + 1)
-                ) if smooth else
-            ((self.cat_f[word] != 0) * cat_f_totals).sum() / cat_f_totals.sum()
+        cnt_f_totals = self.cnt_f_totals
+        cs_cnt_f_totals = self.cs_cnt_f_totals
+
+        wc      = self.f[word]                   # word count
+        if not wc:
+            return 1                             # decoupled from freq: max. dispersion
+        n       = len(cnt_f_totals)              # part count
+        r       = (self.cnt_f[word] != 0).sum()  # range (#parts w occurs in)
+        # Theoretical min and max for `r` fiven the `wc`:
+        r_hi     = min(wc, n)
+        r_lo     = np.searchsorted(cs_cnt_f_totals, wc)  # 0..n
+
+        assert r_lo <= r <= r_hi, (
+            (r_lo, r, r_hi),
+            (cs_cnt_f_totals[0], cs_cnt_f_totals[r_lo], cs_cnt_f_totals[-1]),
+            cs_cnt_f_totals
             )
 
-    def gini_dispersion(
+        if r_hi == r_lo:
+            print('r_hi == r_lo', word, r_hi, file=sys.stderr)  # TODO
+            return 1
+
+        return (
+            (r - r_lo + 1) / (r_hi - r_lo + 1) if smooth else
+            (r - r_lo) / (r_hi - r_lo)
+            )
+
+    def range_nofreq_gries(self, word: str, smooth: bool = False) -> float:
+        '''
+        Normalized range (in 0..1) only for categories/counts (not based on cd),
+        "controlled" for frequency (Gries, 2021).
+        '''
+        cnt_f_totals = self.cnt_f_totals
+
+        wc      = self.f[word]                   # word count
+        if not wc:
+            return 1                             # decoupled from freq: max. dispersion
+        n       = len(cnt_f_totals)              # part count
+        r       = (self.cnt_f[word] != 0).sum()  # range (#parts w occurs in)
+        # Theoretical min and max for `r` fiven the `wc`:
+        r_hi    = min(wc, n)
+        r_lo    = int(wc > 0)  # either 0 or 1 (Gries says always 1)
+
+        if r_hi == r_lo:
+            print('gries: r_hi == r_lo', word, r_hi, file=sys.stderr)  # TODO
+            return 1
+
+        return (
+            (r - r_lo + 1) / (r_hi - r_lo + 1) if smooth else
+            (r - r_lo) / (r_hi - r_lo)
+            )
+
+    def weighted_range(self, word: str, smooth: bool = False) -> float:
+        '''
+        Normalized weighted range, only for categories/counts (not based on cd).
+        '''
+
+        cnt_f_totals = self.cnt_f_totals
+        return (
+            (
+                (((self.cnt_f[word] != 0) * cnt_f_totals).sum() + 1) /
+                (cnt_f_totals.sum() + 1)
+                ) if smooth else
+            ((self.cnt_f[word] != 0) * cnt_f_totals).sum() / cnt_f_totals.sum()
+            )
+
+    def sparse_gini_dispersion(
         self, word: str, smooth: bool = False, weight: bool = False
+        ) -> float:
+        return self.gini_dispersion(word, smooth=smooth, weight=weight, sparse=True)
+
+    def sort_gini_dispersion(
+        self, word: str, smooth: bool = False, weight: bool = False
+        ) -> float:
+        return self.gini_dispersion(word, smooth=smooth, weight=weight, sort=True)
+
+    def gini_dispersion(
+        self, word: str, smooth: bool = False, weight: bool = False,
+        sparse: bool = False, sort: bool = False
         ) -> float:
         '''
         This is Gini *dispersion* (i.e. equality), i.e. the complement of
@@ -482,73 +656,104 @@ class FrequencyData(NamedTuple):
         Smoothing is added by smoothing the individual frequencies.
         '''
 
-        if smooth:
-            f_w = self.simple_smooth_cat_frequencies(word)
-        else:
-            f = self.cat_f
+        if sort:
+            assert not smooth
+            f = self.cnt_f
             if word not in f:
                 return 0.0                              # no dispersion
-            f_w = f[word] / self.cat_f_totals           # normalize by category
+            f_w = f[word]
+            if not isinstance(f_w, pd.arrays.SparseArray):
+                f_w = pd.arrays.SparseArray(f_w)
+            assert f_w.fill_value == 0
+            nz_indices  = f_w.sp_index.indices
+            nz_values   = f_w.sp_values
+            nz_totals   = self.cnt_f_totals[nz_indices]
+            n = len(f_w)
+            # The following computations are non-sparse (using only non-zero values)
+            f_w = nz_values / nz_totals                 # normalize by unit
+            f_w /= f_w.sum()                            # normalize by word
+            f_w.sort()
+            nnz = len(f_w)
 
-        # We normalize by word before the final computation, as this will make the
-        # numbers larger, resulting in better precision:
-        f_w /= f_w.sum()                            # normalize by word
+            coef = np.arange(n - 2 * nnz + 1, n, 2)
 
+            g = 1 - (coef * f_w).sum() / n
 
-        n = len(f_w)
-        as_rows = np.tile(f_w, (n, 1))
-        as_cols = as_rows.T
+        elif sparse:
+            assert not smooth
+            f = self.cnt_f
+            if word not in f:
+                return 0.0                              # no dispersion
+            # TODO this basically makes the array non-sparse:
+            f_w = f[word] / self.cnt_f_totals           # normalize by unit
 
-        # No need to divide by f_w.sum() == f_w.mean() * n,
-        # which is == 1 after the normalization by word.
-        # Note that we are returning complement (1 - Gini inequality), i.e. index
-        # of dispersion
-        if weight:
-            w = as_rows * as_cols
-            d = np.abs(as_rows - as_cols)
-            return 1 - (w * d).sum() / (2 * n)
+            # We normalize by word before the final computation, as this will make the
+            # numbers larger, resulting in better precision:
+            f_w /= f_w.sum()                            # normalize by word
 
-        return 1 - np.abs(as_rows - as_cols).sum() / (2 * n)
+            n = len(f_w)
+
+            # TOOD optimize the above?
+            # TOOD we ignore the sparsity we have, create CSR from scratch:
+            sp_f_w = sp.sparse.csr_matrix(f_w)
+            as_rows = sp.sparse.vstack([sp_f_w] * sp_f_w.shape[1], 'csr')
+            as_cols = as_rows.T
+            assert not weight
+            g = 1 - abs(as_rows - as_cols).sum() / (2 * n)
+        else:
+            if smooth:
+                f_w = self.simple_smooth_cnt_frequencies(word)
+            else:
+                f = self.cnt_f
+                if word not in f:
+                    return 0.0                              # no dispersion
+                # TODO this basically makes the array non-sparse:
+                f_w = f[word] / self.cnt_f_totals           # normalize by unit
+
+            # We normalize by word before the final computation, as this will make the
+            # numbers larger, resulting in better precision:
+            f_w /= f_w.sum()                            # normalize by word
+
+            n = len(f_w)
+
+            as_rows = np.tile(f_w, (n, 1))
+            as_cols = as_rows.T
+
+            # No need to divide by f_w.sum() == f_w.mean() * n,
+            # which is == 1 after the normalization by word.
+            # Note that we are returning complement (1 - Gini inequality), i.e. index
+            # of dispersion
+            if weight:
+                w = as_rows * as_cols
+                d = np.abs(as_rows - as_cols)
+                return 1 - (w * d).sum() / (2 * n)
+
+            g = 1 - np.abs(as_rows - as_cols).sum() / (2 * n)
+
+        return g
 
     def maxmin_dispersion(self, word: str, smooth: bool = False) -> float:
         if smooth:
-            f_w = self.simple_smooth_cat_frequencies(word)
+            f_w = self.simple_smooth_cnt_frequencies(word)
         else:
-            f = self.cat_f
+            f = self.cnt_f
             if word not in f:
                 return 0.0                              # no dispersion
-            f_w = f[word] / self.cat_f_totals           # normalize by category
+            f_w = f[word] / self.cnt_f_totals           # normalize by unit
 
         # Do not normalize by word, max - min is already in 0..1:
         return 1 - (f_w.max() - f_w.min())  # 1 - maxmin
-
-    def ada(self, word: str, smooth: bool = False) -> float:
-        # Wilcox's ADA (analog of the average or mean deviation):
-        if smooth:
-            f_w = self.simple_smooth_cat_frequencies(word)
-        else:
-            f = self.cat_f
-            if word not in f:
-                return 0.0                              # no dispersion
-            f_w = f[word] / self.cat_f_totals           # normalize by category
-
-        f_w /= f_w.sum()    # Normalize by word
-
-        # p. 328 of Wilcox's paper (our f_w is normalized to sum to 1)
-        return 1 - (
-            np.sum(np.abs(f_w - 1/len(f_w))) / 2
-            )
 
     def juilland_d(self, word: str, smooth: bool = False) -> float:
         # ~ variation coefficient
 
         if smooth:
-            f_w = self.simple_smooth_cat_frequencies(word)
+            f_w = self.simple_smooth_cnt_frequencies(word)
         else:
-            f = self.cat_f
+            f = self.cnt_f
             if word not in f:
                 return 0.0                              # no dispersion
-            f_w = f[word] / self.cat_f_totals           # normalize by category
+            f_w = f[word] / self.cnt_f_totals           # normalize by unit
 
         # Do not normalize by word: no effect on VC = SD / mean:
         vc = np.std(f_w) / np.mean(f_w)
@@ -559,59 +764,63 @@ class FrequencyData(NamedTuple):
         # variance-to-mean ratio (VMR)
 
         if smooth:
-            f_w = self.simple_smooth_cat_frequencies(word)
+            f_w = self.simple_smooth_cnt_frequencies(word)
         else:
-            f = self.cat_f
+            f = self.cnt_f
             if word not in f:
                 return 0.0                              # no dispersion
-            f_w = f[word] / self.cat_f_totals           # normalize by category
+            f_w = f[word] / self.cnt_f_totals           # normalize by unit
 
         f_w /= f_w.sum()                        # Normalize by word => 0..1 range
 
         vmr = np.var(f_w) / np.mean(f_w)
         return 1 - vmr
 
-    def gries_dp_eq_dispersion(
-        self,
-        word: str, smooth: bool = False
-        ) -> float:
-        return self.gries_dp_dispersion(word, smooth, equalize=True)
-
-    def gries_dp_dispersion(
-        self,
-        word: str, smooth: bool = False,
-        equalize: bool = False
-        ) -> float:
-        f = self.cat_f
+    def gries_dp_dispersion(self, word: str, smooth: bool = False) -> float:
+        f = self.cnt_f
         if not smooth and word not in f:
             return 0.0                                  # no dispersion
         f_w = f[word]
 
-        f_totals    = self.cat_f_totals
+        f_totals    = self.cnt_f_totals
 
         if smooth:
-            # Smoothing as if using simple_smooth_cat_frequencies().
+            # Smoothing as if using simple_smooth_cnt_frequencies().
             # Note: Avoid += so that we do not overwrite original values in dict.
             f_w         = f_w + 1
             f_totals    = f_totals + 1
         cat_prop    = f_totals / f_totals.sum()
         word_prop   = f_w / f_w.sum()
 
-        if equalize:
-            # TODO exprimental
-            return 1 - np.sum(np.abs(word_prop - cat_prop) * cat_prop) / 2
-
         # Return 1 - DP (= D_P in Egbert et al.(2020))
         return 1 - np.sum(np.abs(word_prop - cat_prop)) / 2
 
+    def lyne_d3(self, word: str, smooth: bool = False) -> float:
+        f = self.cnt_f
+        if not smooth and word not in f:
+            return 0.0                                  # no dispersion
+        f_w = f[word]
+
+        f_totals    = self.cnt_f_totals
+
+        if smooth:
+            # Smoothing as if using simple_smooth_cnt_frequencies().
+            # Note: Avoid += so that we do not overwrite original values in dict.
+            f_w         = f_w + 1
+            f_totals    = f_totals + 1
+        cat_prop    = f_totals / f_totals.sum()
+        word_prop   = f_w / f_w.sum()
+
+        return 1 - np.sum((word_prop - cat_prop)**2) / 4
+
     def rosengren_s(self, word: str, smooth: bool = False) -> float:
         if smooth:
-            f_w = self.simple_smooth_cat_frequencies(word)
+            f_w = self.simple_smooth_cnt_frequencies(word)
         else:
-            f = self.cat_f
+            f = self.cnt_f
             if word not in f:
                 return 0.0                              # no dispersion
-            f_w = f[word] / self.cat_f_totals           # normalize by category
+            f_w = f[word] / self.cnt_f_totals           # normalize by unit
 
         # We normalize by word before the final computation, as this will make the
         # numbers larger, resulting in better precision:
@@ -620,27 +829,26 @@ class FrequencyData(NamedTuple):
 
     def rosengren_like_sqrt(self, word: str, smooth: bool = False) -> float:
         if smooth:
-            f_w = self.simple_smooth_cat_frequencies(word)
+            f_w = self.simple_smooth_cnt_frequencies(word)
         else:
-            f = self.cat_f
+            f = self.cnt_f
             if word not in f:
                 return 0.0                              # no dispersion
-            f_w = f[word] / self.cat_f_totals           # normalize by category
+            f_w = f[word] / self.cnt_f_totals           # normalize by unit
 
         # We normalize by word before the final computation, as this will make the
         # numbers larger, resulting in better precision:
         f_w /= f_w.sum()                            # normalize by word
         return np.sqrt(f_w).sum() / len(f_w)    # removed ** 2
 
-
     def carrol_d2(self, word: str, smooth: bool = False) -> float:
         if smooth:
-            f_w = self.simple_smooth_cat_frequencies(word)
+            f_w = self.simple_smooth_cnt_frequencies(word)
         else:
-            f = self.cat_f
+            f = self.cnt_f
             if word not in f:
                 return 0.0                              # no dispersion
-            f_w = f[word] / self.cat_f_totals           # normalize by category
+            f_w = f[word] / self.cnt_f_totals           # normalize by unit
 
         # We normalize by word before the final computation, as this will make the
         # numbers larger, resulting in better precision:
@@ -679,6 +887,7 @@ class FrequencyData(NamedTuple):
         delimiter: str = DEFAULT_DELIMITER,
         cased: bool = False,
         to_lower: bool = False,
+        counts: Optional[CountArrays] = None,
         categories: bool = False,
         categories_as_cd: bool = False,
         verbose: bool = False,
@@ -687,7 +896,7 @@ class FrequencyData(NamedTuple):
         with FrequencyData._open(filename, zip_args) as file:
             return FrequencyData.load(
                 file, total_row, total_header, header, cols, sub_lemma, delimiter,
-                cased, to_lower, categories, categories_as_cd,
+                cased, to_lower, counts, categories, categories_as_cd,
                 verbose=verbose, filename=filename, ignore_errors=ignore_errors
                 )
 
@@ -704,6 +913,7 @@ class FrequencyData(NamedTuple):
         delimiter: str = DEFAULT_DELIMITER,
         cased: bool = False,
         to_lower: bool = False,
+        counts: Optional[CountArrays] = None,
         categories: bool = False,
         categories_as_cd: bool = False,
         force_verbose: bool = False,
@@ -719,7 +929,7 @@ class FrequencyData(NamedTuple):
 
         return FrequencyData.from_file(
             filename, zip_args, total_row, total_header, header, cols, sub_lemma,
-            delimiter, cased, to_lower, categories, categories_as_cd,
+            delimiter, cased, to_lower, counts, categories, categories_as_cd,
             verbose=verbose, ignore_errors=ignore_errors
             )
 
@@ -811,7 +1021,7 @@ class FrequencyData(NamedTuple):
             if cd_total < 0:
                 raise ValueError(f'Negative total CD after subtraction: {cd_total}')
 
-        return FrequencyData(f, cd, f_total, cd_total)  # ignores categories
+        return FrequencyData(f, cd, f_total, cd_total)  # ignores categories/counts
 
 
 if __name__ == '__main__':

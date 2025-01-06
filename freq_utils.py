@@ -13,6 +13,7 @@ import bz2
 import lzma
 import argparse
 import sys
+import time
 
 import numpy as np
 import pandas as pd
@@ -23,6 +24,8 @@ NORMALIZED_SUFFIX_FNS = (
     (True, '-nfkc', lambda w: unicode_normalize('NFKC', w)),
     (True, '-nfkc-lower', lambda w: unicode_normalize('NFKC', w).lower())
     )
+
+MAX_N_TYPES = 650_000   # TODO: Increase if you we have more types (unique words)
 
 
 def normalize2normalized_suffix_fns(
@@ -157,7 +160,9 @@ class WordCounter:
     True
     '''
     __slots__ = ('word_count', 'cat2word_count', 'word_docn', 'word_channels',
-                 'word_pos', 'doc_words', 'word2doc_count', 'word2channel_count',
+                 'word_pos', 'doc_words',
+                 # Optional counts (count_in_...):
+                 'doc2sparse_words', 'channel2sparse_words', 'word_index',
                  'doc_n'
                  )
     word_count: Counter[str]
@@ -166,12 +171,14 @@ class WordCounter:
     word_channels: Optional[dict[str, set[Union[int, str]]]]    # for tubelex (YouTube)
     word_pos: Optional[dict[str, Counter[str]]]      # optional, for tubelex (YouTube)
     doc_words: set[str]                                         # words in current doc
-    word2doc_count: Optional[dict[str, np.ndarray]]  # array indices are docs
-    word2channel_count: Optional[dict[str, np.ndarray]]  # array indices are channels
+    doc2sparse_words: Optional[dict[int, pd.arrays.SparseArray]]
+    channel2sparse_words: Optional[dict[int, pd.arrays.SparseArray]]
+    word_index: Optional[dict[str, int]]
     doc_n: int
 
     def __init__(self,
                  channels: bool = False, pos: bool = False, categories: bool = False,
+                 # TODO: the exact numbers are currently ignored:
                  count_in_docs: int | None = None,
                  count_in_channels: int | None = None
                  ):
@@ -182,14 +189,12 @@ class WordCounter:
         self.word_channels  = defaultdict(set) if channels else None
         self.word_pos       = defaultdict(Counter) if pos else None
         self.doc_words      = set()
-        # Save space by using int32. We do not expect any word to occur more than
-        # 2^31-1 == 2,147,483,647 (2G) times in a single channel.
-        self.word2doc_count = defaultdict(
-            lambda: np.zeros(count_in_docs, dtype='int32')
-            ) if count_in_docs else None
-        self.word2channel_count = defaultdict(
-            lambda: np.zeros(count_in_channels, dtype='int32')
-            ) if count_in_channels else None
+        self.doc2sparse_words = {} if (count_in_docs is not None) else None
+        self.channel2sparse_words = {} if (count_in_channels is not None) else None
+        self.word_index = (
+            {} if ((count_in_docs is not None) or (count_in_channels is not None))
+            else None
+            )
         self.doc_n = 0
 
     def __eq__(self, other):
@@ -200,8 +205,9 @@ class WordCounter:
             self.word_channels == other.word_channels and
             self.word_pos == other.word_pos and
             self.doc_words == other.doc_words and
-            self.word2doc_count == other.word2doc_count and
-            self.word2channel_count == other.word2channel_count
+            self.doc2sparse_words == other.doc2sparse_words and
+            self.channel2sparse_words == other.doc2sparse_words and
+            self.word_index == other.word_index
             )
 
     def add(
@@ -221,9 +227,22 @@ class WordCounter:
             None
             )
         wc = self.word_channels
-        w2dc = self.word2doc_count
-        w2cc = self.word2channel_count
+        d2sw = self.doc2sparse_words
+        c2sw = self.channel2sparse_words
+
+        word_index = self.word_index
+        word_array = (
+            # We use 'int64' (even though we do not need it) as a workaround for a bug
+            # where adding `csw + dsw` below throws:
+            #   AttributeError: module 'pandas._libs.sparse' has no attribute
+            #   'sparse_add_int32'. Did you mean: 'sparse_add_int64'?
+            # We later convert the whole DF to int32 before dumping it.
+
+            np.zeros(MAX_N_TYPES, dtype='int64') if (word_index is not None) else
+            None
+            )
         doc_n = self.doc_n
+
         for w in words:
             self.word_count[w] += 1
             self.doc_words.add(w)
@@ -231,10 +250,24 @@ class WordCounter:
                 wc[w].add(channel_id)  # type: ignore
             if cat_word_count is not None:
                 cat_word_count[w] += 1
-            if w2dc is not None:
-                w2dc[w][doc_n] += 1
-            if w2cc is not None:
-                w2cc[w][channel_id] += 1
+            if word_index is not None:
+                if (wi := word_index.get(w)) is None:
+                    wi = len(word_index)
+                    word_index[w] = wi
+                word_array[wi] += 1
+
+        if word_index is not None:
+            dsw = pd.arrays.SparseArray(word_array)
+            if d2sw is not None:
+                # TODO OK for tubelex, but not in general: docs can be split into
+                # several add() calls:
+                assert doc_n not in d2sw
+                d2sw[doc_n] = dsw
+            if c2sw is not None:
+                if (csw := c2sw.get(channel_id)) is not None:
+                    c2sw[channel_id] = csw + dsw
+                else:
+                    c2sw[channel_id] = dsw
 
     def add_pos(
         self,
@@ -425,14 +458,65 @@ class WordCounter:
             *(wc.total() for wc in cat_w_counts)
             ))
 
-    def dump_optional_counts(
+    def pickle_optional_counts(
         self,
-        f: TextIO,
-        channels: bool = False,  # docs or channels
-        sep: str = '\t'
+        path: str,
+        channels: bool = False  # docs or channels
         ):
-        data = self.word2channel_count if channels else self.word2doc_count
-        pd.DataFrame(data).T.to_csv(f, sep=sep)
+        n_types = len(self.word_index)
+
+        x2sparse_words = (
+            self.channel2sparse_words if channels else
+            self.doc2sparse_words
+            )
+
+        t0 = time.perf_counter()
+        x2sparse_words = {
+            x: sparse_words[:n_types] for x, sparse_words in x2sparse_words.items()
+            }
+        print(f'Pickle stats (channels={channels}):', file=sys.stderr)
+        t1 = time.perf_counter()
+        print('- Trim words:      ', t1 - t0, file=sys.stderr)
+        t00 = t0
+
+        t0 = time.perf_counter()
+        df = pd.DataFrame(x2sparse_words, index=self.word_index.keys())
+        t1 = time.perf_counter()
+        print('- Make DF:         ', t1 - t0, file=sys.stderr)
+
+        t0 = time.perf_counter()
+        df.sort_index(inplace=True)
+        # This is what takes long time ~ counter construction
+        t1 = time.perf_counter()
+        print('- Sort index:      ', t1 - t0, file=sys.stderr)
+
+        if not (df.dtypes == pd.SparseDtype('int32')).all():
+            # There are two reasons we do this (both related of buggy in sparse array
+            # support in pandas):
+            # 1. For some reason sort_index() extends int32 to int64.
+            # 2. Adding int32 sparse arrays sometimes doesn't seem to work, so we stick
+            #    to 64-bits for computations anyway.
+            #
+            # First check if the data is all int64 as we expect:
+            if not (df.dtypes == pd.SparseDtype('int64')).all():
+                raise Exception(
+                    f'After sorting, the data is neither all Sparse[int32, 0] nor '
+                    f'all Sparse[int64, 0]. Instead it has the following types:\n'
+                    f'{df.dtypes.unique()}\n'
+                    )
+            # Coerce to int32 before pickling (to save space):
+            t0 = time.perf_counter()
+            df = df.astype(pd.SparseDtype('int32'))
+            t1 = time.perf_counter()
+            print('- Coerce to int32: ', t1 - t0, file=sys.stderr)
+
+        t0 = time.perf_counter()
+        df.to_pickle(path)
+        t1 = time.perf_counter()
+        print('- Pickle:          ', t1 - t0, file=sys.stderr)
+        print('- TOTAL:           ', t1 - t00, file=sys.stderr)
+        print('Checksum:          ', df.sum().sum(), file=sys.stderr)
+        print('\n')
 
 
 class WordCounterGroup(dict[str, WordCounter]):
@@ -542,12 +626,14 @@ class WordCounterGroup(dict[str, WordCounter]):
 
         for norm_suffix, c in self.items():
             for opt_suffix, channels in dump_opt_suffix_channels:
-                with storage.open(
-                    # replace has no effect if not do_norm (no '%'):
-                    path_pattern.replace('%', norm_suffix + opt_suffix),
-                    'wt'
-                    ) as f:
-                    if not opt_suffix:
+                if not opt_suffix:
+                    with storage.open(
+                        # replace has no effect if not do_norm (no '%'):
+                        path_pattern.replace('%', norm_suffix + opt_suffix),
+                        'wt'
+                        ) as f:
                         c.dump(f, cols, totals)
-                    else:
-                        c.dump_optional_counts(f, channels)
+                else:
+                    path = path_pattern.replace('%', norm_suffix + opt_suffix)
+                    path = path.replace('.tsv.xz', '.pkl')
+                    c.pickle_optional_counts(path, channels=channels)

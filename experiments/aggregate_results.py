@@ -48,25 +48,26 @@ CORPUS2ID = {
 
 MEASURES = [
     'frequency',
-    #'simple_frequency', same as frequency => breaks pvalue computation
-    'range_videos',
-    'range_channels',
-    'range_categories',
-    'weighted_range',
-    'gini',
-    'maxmin',
-    'ada',
+    'range',
+#     'weighted_range',   # TODO?
+#     'range_nofreq',
+#     'range_nofreq_gries',
+    'sort_gini',
+#    'maxmin',
     'juilland_d',
-    'vmr',
+#     'vmr',
     'gries_dp',
-    'gries_dp_eq',
     'rosengren_s',
-    'sqrt',
-    'carrol_d2'
+    'carrol_d2',
+    'lyne_d3',
     ]
 TRANSFORMS = ['', 'log_']   # NO IMPROVEMENT: 'sqrt_'
+VARIANTS = ['', '_channels', '_videos']
 MEASURE2ID = { # TODO
-    tm: f'tubelex-{tm}' for t in TRANSFORMS for m in MEASURES for tm in (t + m,)
+    tm: f'tubelex-{tm}'
+    for t in TRANSFORMS
+    for v in VARIANTS
+    for m in MEASURES for tm in (t + m + v,)
     }
 
 TASK2NAME = {
@@ -163,11 +164,14 @@ def main(args: argparse.Namespace):
         for method, method_id in method2id.items():
             path = f'{filename}-{method_id}.tsv'
             if os.path.exists(path):
-                print(f'Reading {path}')
-                df = pd.read_table(path, index_col='language')
-                for col in cols:
-                    if col in df:
-                        d[col][method] = df[col]
+                if not os.path.getsize(path):
+                    print(f'Warning: Ignoring empty file at {path}')
+                else:
+                    print(f'Reading {path}')
+                    df = pd.read_table(path, index_col='language')
+                    for col in cols:
+                        if col in df:
+                            d[col][method] = df[col]
 
         if add_mlsp:
             for col in cols:

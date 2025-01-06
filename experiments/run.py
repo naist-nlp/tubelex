@@ -6,7 +6,11 @@ import sys
 import os
 import re
 from itertools import zip_longest
+
+import warnings
+warnings.simplefilter(action='ignore', category=FutureWarning)
 import pandas as pd
+
 from csv import QUOTE_NONE
 import numpy as np
 import wordfreq as wf  # word_frequency, tokenize, get_frequency_dict
@@ -15,12 +19,13 @@ from functools import partial
 from typing import NamedTuple, Any
 from tqdm import tqdm
 import scipy
+import psutil
 from sklearn.linear_model import RidgeCV, LinearRegression
 from sklearn.metrics import (
     mean_squared_error as mse_score, mean_absolute_error as mae_score, r2_score
     )
 from joblib import dump, load
-from frequency_data import FrequencyData, download_if_necessary
+from frequency_data import FrequencyData, CountArrays, download_if_necessary
 from datasets import load_dataset, Dataset
 from spalex import get_spalex
 
@@ -75,6 +80,7 @@ CAT_ID2CATEGORY = {
 def pearson_r(x: np.ndarray, y: np.ndarray):
     return np.corrcoef(x, y)[0][1]
 
+
 def adjusted_r2(
     xs: Sequence[float] | Sequence[np.ndarray] | np.ndarray,
     y: np.ndarray
@@ -99,11 +105,52 @@ LANG2DATASET_ID = {
     'ja': 'japanese_lcp_labels'
     }
 
+UNIT_VIDEOS = 'videos'
+UNIT_CHANNELS = 'channels'
+
+
+class CPUTimeTracker:
+    def __init__(self, function):
+        self.function   = function
+        self.time       = 0.0
+        self.calls      = 0
+        self._process   = psutil.Process()
+
+    def __call__(self, *args, **kwargs):
+        start_time = sum(self._process.cpu_times()[:2])  # user + system time
+
+        result = self.function(*args, **kwargs)
+
+        end_time = sum(self._process.cpu_times()[:2])
+        self.time += end_time - start_time
+        self.calls += 1
+
+        return result
+
+    def __str__(self) -> str:
+        calls = self.calls
+        time = self.time
+        return (
+            '(not called)' if (not calls) else
+            f'{time} seconds / {calls} calls = avg. {time/calls} s/call'
+            )
+
 
 class MeasureSpec(NamedTuple):
-    function:  Callable[[FrequencyData, str], float]
-    params:    dict = dict(categories=True)  # use categories for dispersion by default
-    is_smooth: bool = False
+    function:   Callable[[FrequencyData, str], float]
+    params:     dict = dict(categories=True)  # use categories for dispersion by default
+    is_smooth:  bool = False
+    unit:       Optional[str] = None  # UNIT_VIDEOS, UNIT_CHANNELS or None (categories)
+
+    # MeasureSpec(...) => categories by default
+
+    @staticmethod
+    def channels(f: Callable[[FrequencyData, str], float]) -> 'MeasureSpec':
+        return MeasureSpec(f, {}, unit=UNIT_CHANNELS)
+
+    @staticmethod
+    def videos(f: Callable[[FrequencyData, str], float]) -> 'MeasureSpec':
+        return MeasureSpec(f, {}, unit=UNIT_VIDEOS)
 
     @property
     def can_smooth(self) -> bool:
@@ -124,31 +171,42 @@ class MeasureSpec(NamedTuple):
         return self.function(fd, w)
 
 
+_MEASURE2SPEC_UNIT = {
+    'weighted_range':       MeasureSpec(FrequencyData.weighted_range),
+    'range_nofreq':         MeasureSpec(FrequencyData.range_nofreq),
+    'range_nofreq_gries':   MeasureSpec(FrequencyData.range_nofreq_gries),
+    'gini':                 MeasureSpec(FrequencyData.gini_dispersion),
+    'sparse_gini':          MeasureSpec(FrequencyData.sparse_gini_dispersion),
+    'sort_gini':            MeasureSpec(FrequencyData.sort_gini_dispersion),
+    'maxmin':               MeasureSpec(FrequencyData.maxmin_dispersion),
+    'juilland_d':           MeasureSpec(FrequencyData.juilland_d),
+    'vmr':                  MeasureSpec(FrequencyData.vmr_dispersion),
+    'gries_dp':             MeasureSpec(FrequencyData.gries_dp_dispersion),
+    'lyne_d3':              MeasureSpec(FrequencyData.lyne_d3),
+    'rosengren_s':          MeasureSpec(FrequencyData.rosengren_s),
+    'sqrt':                 MeasureSpec(FrequencyData.rosengren_like_sqrt),
+    'carrol_d2':            MeasureSpec(FrequencyData.carrol_d2)
+    }
+
 MEASURE2SPEC = {
     'frequency':            MeasureSpec(lambda fd, w: fd.smooth_frequency_missing(w)[0],
                                         {}, is_smooth=True),  # Note: always smooth
     'simple_frequency':     MeasureSpec(FrequencyData.simple_smooth_frequency,
                                         {}, is_smooth=True),  # Note: always smooth
     # range (based on cd):
-    'range_videos':         MeasureSpec(FrequencyData.cd_range,
-                                        dict(cols=('word', 'count', 'videos'))),
+    'range':                MeasureSpec(FrequencyData.cd_range,
+                                        dict(categories_as_cd=True)),
     'range_channels':       MeasureSpec(FrequencyData.cd_range,
                                         dict(cols=('word', 'count', 'channels'))),
-    'range_categories':     MeasureSpec(FrequencyData.cd_range,
-                                        dict(categories_as_cd=True)),
+    'range_videos':         MeasureSpec(FrequencyData.cd_range,
+                                        dict(cols=('word', 'count', 'videos'))),
     # methods based on categories:
-    'weighted_range':       MeasureSpec(FrequencyData.weighted_range),
-    'gini':                 MeasureSpec(FrequencyData.gini_dispersion),
-    'maxmin':               MeasureSpec(FrequencyData.maxmin_dispersion),
-    'ada':                  MeasureSpec(FrequencyData.ada),
-    'juilland_d':           MeasureSpec(FrequencyData.juilland_d),
-    'vmr':                  MeasureSpec(FrequencyData.vmr_dispersion),
-    'gries_dp':             MeasureSpec(FrequencyData.gries_dp_dispersion),
-    'gries_dp_eq':          MeasureSpec(FrequencyData.gries_dp_eq_dispersion),
-    'rosengren_s':          MeasureSpec(FrequencyData.rosengren_s),
-    'sqrt':                 MeasureSpec(FrequencyData.rosengren_like_sqrt),
-    'carrol_d2':            MeasureSpec(FrequencyData.carrol_d2)
     }
+
+for name, spec in _MEASURE2SPEC_UNIT.items():
+    MEASURE2SPEC[name] = spec
+    MEASURE2SPEC[f'{name}_channels'] = MeasureSpec.channels(spec.function)
+    MEASURE2SPEC[f'{name}_videos'] = MeasureSpec.videos(spec.function)
 
 
 def get_mlsp_dataset(
@@ -354,7 +412,9 @@ def get_tubelex_freq_data(
     tokenization: Optional[str] = None,     # regex, treebank
     form: str = 'surface',                  # surface, base, lemma
     category: Optional[str] = None,
-    params: Optional[dict] = None
+    params: Optional[dict] = None,
+    unit: Optional[str] = None,
+    cache_dir: Optional[str] = None,        # required if unit is not None, else ignored
     ) -> FrequencyData:
 
     if tokenization is not None:
@@ -369,7 +429,8 @@ def get_tubelex_freq_data(
         if form != 'surface':
             language = f'{language}-{form}-pos'  # note: we ignore POS
 
-    assert category is None or not params, 'cannot specifify category AND params'
+    assert category is None or not params, 'cannot specify category AND params'
+    assert category is None or not unit, 'cannot specify category AND unit'
 
     if not params:
         params = dict(cols=(
@@ -377,9 +438,19 @@ def get_tubelex_freq_data(
             else None
             ))
 
-    return FrequencyData.from_file_url(
+    if unit is not None:
+        assert cache_dir is not None, 'unit requires cache_dir'
+        os.makedirs(cache_dir, exist_ok=True)
+        filename = f'tubelex-{language}-nfkc-lower_{unit}.pkl'
+        counts = CountArrays(os.path.join('frequencies', filename),
+                             cache=os.path.join(cache_dir, filename))
+    else:
+        counts = None
+
+    return FrequencyData.from_file(
         filename=f'frequencies/tubelex-{language}-nfkc-lower.tsv.xz',
         total_row=True,
+        counts=counts,
         **params
         )
 
@@ -741,7 +812,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         '--weight', action='store_true',
         help='Weight the specified measure by corpus part (category) size.'
-    )
+        )
     parser.add_argument('--models', default='experiments/models',
                         help='Model directory.')
     parser.add_argument('--verbose', '-v', action='store_true')
@@ -1065,10 +1136,12 @@ def main(args: argparse.Namespace) -> None:
     if args.log_lookups is not None:
         f_lookups = open(args.log_lookups, 'a')
 
-    measure     = None
+    measure         = None
+    tracked_measure = None
     if args.measure:
         assert args.tubelex, '--measure requires --tubelex'
         measure = MEASURE2SPEC[args.measure]
+        tracked_measure = CPUTimeTracker(measure)
     log_measure = args.log_measure
     sqrt_measure = args.sqrt_measure
     smooth      = args.smooth
@@ -1145,7 +1218,7 @@ def main(args: argparse.Namespace) -> None:
         (len(input_sets) == len(output_files))
         ), (train, len(input_sets), len(output_files))
 
-    lang2freq_data = {}
+    lang2freq_data: dict[str, FrequencyData] = {}
     lang2gini_func = {}
     activ_es_func = None
 
@@ -1176,7 +1249,9 @@ def main(args: argparse.Namespace) -> None:
             lang,
             form=args.form, tokenization=args.tokenization,
             category=args.category,
-            params=(measure.params if (measure is not None) else None)
+            params=(measure.params if (measure is not None) else None),
+            unit=(measure.unit if (measure is not None) else None),
+            cache_dir=cache_dir
             )
 
     for lang in args.wikipedia:
@@ -1268,7 +1343,7 @@ def main(args: argparse.Namespace) -> None:
             return frequency_missing_func(w)
         if (freq_data := lang2freq_data.get(lang)) is not None:
             if measure is not None:
-                f = measure(freq_data, w, smooth=smooth, weight=weight)
+                f = tracked_measure(freq_data, w, smooth=smooth, weight=weight)
                 if eps_clip:
                     f = max(NP_EPS, f)
                 elif zero_clip:
@@ -1525,6 +1600,13 @@ def main(args: argparse.Namespace) -> None:
             fo.close()
     if f_lookups:
         f_lookups.close()
+
+    for fd in lang2freq_data.values():
+        if isinstance(fd.cnt_f, CountArrays):
+            fd.cnt_f.save_cache()
+
+    if tracked_measure is not None:
+        print(f'Measure CPU time: {tracked_measure}', file=sys.stderr)
 
 
 if __name__ == '__main__':
