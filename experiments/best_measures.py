@@ -103,12 +103,12 @@ def metric2transform_base_parts(m: str):
 
 MEASURE2NAME = {
     'range':        'Range',
-    'sort_gini':    'Gini',
+    'sort_gini':    'Gini Index',
     'juilland_d':   'Juilland\'s $D$',
     'gries_dp':     'Gries\'s DP',
     'rosengren_s':  'Rosengren\'s $S$',
-    'carrol_d2':    'Carrol\'s $D_2$',
-    'lyne_d3':      'Lyne\'s $D_2$',
+    'carrol_d2':    'Carroll\'s $D_2$',
+    'lyne_d3':      'Lyne\'s $D_3$',
     'frequency':    'Frequency'
     }
 PART_SUF2NAME = {
@@ -192,6 +192,11 @@ def measure_part_df_frequency_idx(df: pd.DataFrame, to_log: set[str], index=None
     return (mp_mean, mean.loc['log_frequency'], mp_mean.index)
 
 def main(args: argparse.Namespace):
+
+    font_size = 10.5
+    plt.rcParams.update({'font.size': font_size})
+
+
     # PCC (r) for a single variable (in index)
     task2r = {task: pd.read_table(f, index_col=0) for task, f in TASK2R_FILES.items()}
     # P-values for the difference between correlation with log frequency and the
@@ -225,11 +230,16 @@ def main(args: argparse.Namespace):
     w_mean_delta_r2         = delta_r2_w_logf.mean(axis=1)
 
 
-    print_log_tables(r2_wo_logf, r2_w_logf)
 
     # This is in line with the results in `print_log_tables()`
     w_log_measures = {'range_videos', 'range_channels', 'frequency'}
     wo_log_measures = {*w_log_measures, 'sort_gini_videos', 'sort_gini_channels'}
+
+    # never significantly worse than log f, never worse more than by 0.01
+    wo_good_measures = {'range_videos', 'range_channels'}
+    # better by 0.01 for at least 8/11 datasets:
+    w_good_measures = {'rosengren_s_categories', 'range_categories', 'range_videos', 'range_channels'}
+
 
     wo_scores = pd.DataFrame({
         ('mean', 'ALL'): my_round(wo_mean_delta_r2),
@@ -250,6 +260,31 @@ def main(args: argparse.Namespace):
         wo_scores = wo_scores[wo_scores['p_strict', 'ALL'] > 0]
     if not args.no_select_log:
         wo_scores = select_log_non_log(wo_scores, wo_log_measures)
+    print(wo_scores.to_string())
+
+
+
+    print()
+    print('WITH LOG F')
+    w_scores = pd.DataFrame({
+        ('mean', 'ALL'): my_round(w_mean_delta_r2),
+        ('mean', 'fam'): my_round(delta_r2_w_logf['fam'].mean(axis=1)),
+        ('mean', 'ldt'): my_round(delta_r2_w_logf['ldt'].mean(axis=1)),
+        ('mean', 'mlsp'): my_round(delta_r2_w_logf['mlsp'].mean(axis=1)),
+        ('mean', 'en'): my_round(delta_r2_w_logf.xs('English', axis=1, level=1).mean(axis=1)),
+        ('mean', 'ja'): my_round(delta_r2_w_logf.xs('Japanese', axis=1, level=1).mean(axis=1)),
+        ('mean', 'es'): my_round(delta_r2_w_logf.xs('Spanish', axis=1, level=1).mean(axis=1)),
+        ('mean', 'id'): my_round(delta_r2_w_logf.xs('Indonesian', axis=1, level=1).mean(axis=1)),
+        ('mean', 'zh'): my_round(delta_r2_w_logf.xs('Chinese', axis=1, level=1).mean(axis=1)),
+        ('strict', 'ALL'): w_tad_stronger.sum(axis=1),
+        ('strict', 'fam'): w_tad_stronger['fam'].sum(axis=1),
+        ('strict', 'ldt'): w_tad_stronger['ldt'].sum(axis=1),
+        ('strict', 'mlsp'): w_tad_stronger['mlsp'].sum(axis=1),
+        ('relaxed', 'ALL'): w_not_too_weak.sum(axis=1),
+        }).sort_values(by=('mean', 'ALL'))
+    if not args.all:
+        w_scores = w_scores[w_scores['strict', 'ALL']>n_data/2]
+    print(w_scores.to_string())
 
 
     parts_wo_mean_r2, baseline_y, idx = measure_part_df_frequency_idx(r2_wo_logf, wo_log_measures)
@@ -259,7 +294,7 @@ def main(args: argparse.Namespace):
     # r2_w_logf.loc['log_range_channels',:] = 0.45
     parts_w_mean_r2, *_ = measure_part_df_frequency_idx(r2_w_logf, w_log_measures, index=idx)
 
-    plt.figure(figsize=(8, 6))
+    plt.figure(figsize=(11, 5))
 
     palette = sns.color_palette('viridis')
 
@@ -278,12 +313,14 @@ def main(args: argparse.Namespace):
 
     parts_w_mean_r2_display.plot(
         kind='bar', stacked=False, ax=plt.gca(), color=palette[::-2],
-        alpha=0.5,
+        # White hatching instead of alpha=0.5:
+        edgecolor='white', linewidth=0, hatch_linewidth=1.5, hatch='//////',
+        zorder=-1,
         width=barw
         )
 
     # Y axis:
-    plt.gca().set_ylim([0, 0.55])    # nicer and labels fit
+    plt.gca().set_ylim([0, 0.615])    # nicer and labels fit
     plt.yticks(np.arange(0, 0.51, 0.1), rotation='horizontal')
 
     # X axis:
@@ -292,11 +329,11 @@ def main(args: argparse.Namespace):
     # Baseline:
     plt.axhline(y=baseline_y, linestyle='--', linewidth=1, color=palette[0])
     plt.text(
-        x=(len(parts_wo_mean_r2)-1)*0.333,
-        y=baseline_y - 0.015,  # Slightly below the baseline
+        x=-0.52,
+        y=baseline_y - 0.025,  # Slightly below the baseline
         s=f'log-frequency: {baseline_y:.3f}',
-        fontsize=10,
-        ha='center'
+        fontsize=font_size,
+        ha='left'
     )
 
     # Extra annotation:
@@ -309,12 +346,14 @@ def main(args: argparse.Namespace):
             s = f'{y:.3f}'
             if f'{m}_{p}' in w_log_measures:
                 s += ' (log)'
-            plt.text(x, y+0.01, s=s, fontsize=10, color='k', ha='center',
+            if f'{m}_{p}' in w_good_measures:
+                s += ' ★'
+            plt.text(x, y+0.01, s=s, fontsize=font_size, color='k', ha='center',
                      rotation='vertical')
 #             if f'{m}_{p}' in wo_log_measures:
 #                 # plt.plot(x, y+0.0125, '*', markersize=8, color='r')
 #                 plt.text(
-#                     x, y-0.005, s='log', fontsize=10, color='k',
+#                     x, y-0.005, s='log', fontsize=font_size, color='k',
 #                     rotation='vertical', ha='center'
 #                     )
 
@@ -323,26 +362,28 @@ def main(args: argparse.Namespace):
             s = f'{y:.3f}'
             if f'{m}_{p}' in wo_log_measures:
                 s += ' (log)'
-            plt.text(x, y-0.005, s=s, fontsize=10, color='w',
+            if f'{m}_{p}' in wo_good_measures:
+                s += ' ★'
+            plt.text(x, y-0.005, s=s, fontsize=font_size, color='w',
                      rotation='vertical', ha='center', va='top'
                      )
 
     # Add labels and title
-    plt.xlabel('Dispersion Measure')
-    plt.ylabel(r'$\overline{R_\text{a}^2}$')
+    plt.xlabel('Dispersion Measure (DM)')
+    plt.ylabel(r'$R_\text{a}^2$ (Mean Over 11 Datasets)') # $\overline{R_\text{a}^2}$
 
     handles, labels = ax.get_legend_handles_labels()
     legend1 = plt.legend(
         handles[:3], labels[:3],
-        title='Single Variable', alignment='left',
-        bbox_to_anchor=(1, 0.0), loc='lower right',
+        title='Single Variable (DM)', alignment='left',
+        bbox_to_anchor=(0.76, 0.0, 0.24, 0.0), loc='lower left', mode='expand',
         #loc='center right',
         framealpha=1
         )
     plt.legend(
         handles[3:], labels[3:],
-        title='Two Variables\n(DM & log-freq.)', alignment='left',
-        bbox_to_anchor=(1, 0.2), loc='lower right',
+        title='Two Variables (DM, log-freq.)', alignment='left',
+        bbox_to_anchor=(0.76, 0.23, 0.24, 0.0), loc='lower left', mode='expand',
         # bbox_to_anchor=(0, 0.575), loc='lower left',     # under legend1
         framealpha=1
         )
@@ -350,7 +391,11 @@ def main(args: argparse.Namespace):
     plt.tight_layout()
 
     # Show the plot
-    plt.show()
+    # plt.show()
+    plt.savefig('experiments/figures/dispersion_adj_r2.pdf', bbox_inches='tight')
+
+
+    print_log_tables(r2_wo_logf, r2_w_logf)
 
 
 #     print()
@@ -367,26 +412,6 @@ def main(args: argparse.Namespace):
 #             print(col, list(zip(top.index[:ouridx+1].to_list(), top.iloc[:ouridx+1].to_list())))
 #
 
-#     print()
-#     print('WITH LOG F')
-#     w_scores = pd.DataFrame({
-#         ('mean', 'ALL'): my_round(w_mean_delta_r2),
-#         ('mean', 'fam'): my_round(delta_r2_w_logf['fam'].mean(axis=1)),
-#         ('mean', 'ldt'): my_round(delta_r2_w_logf['ldt'].mean(axis=1)),
-#         ('mean', 'mlsp'): my_round(delta_r2_w_logf['mlsp'].mean(axis=1)),
-#         ('mean', 'en'): my_round(delta_r2_w_logf.xs('English', axis=1, level=1).mean(axis=1)),
-#         ('mean', 'ja'): my_round(delta_r2_w_logf.xs('Japanese', axis=1, level=1).mean(axis=1)),
-#         ('mean', 'es'): my_round(delta_r2_w_logf.xs('Spanish', axis=1, level=1).mean(axis=1)),
-#         ('mean', 'id'): my_round(delta_r2_w_logf.xs('Indonesian', axis=1, level=1).mean(axis=1)),
-#         ('mean', 'zh'): my_round(delta_r2_w_logf.xs('Chinese', axis=1, level=1).mean(axis=1)),
-#         ('strict', 'ALL'): w_tad_stronger.sum(axis=1),
-#         ('strict', 'fam'): w_tad_stronger['fam'].sum(axis=1),
-#         ('strict', 'ldt'): w_tad_stronger['ldt'].sum(axis=1),
-#         ('strict', 'mlsp'): w_tad_stronger['mlsp'].sum(axis=1),
-#         ('relaxed', 'ALL'): w_not_too_weak.sum(axis=1),
-#         }).sort_values(by=('mean', 'ALL'))
-#     w_best = w_scores if args.all else w_scores[w_scores['strict', 'ALL']>n_data/2]
-#     print(w_best.to_string())
 #
 #     for col, x in delta_r2_w_logf.items():
 #         top = x.sort_values(ascending=False)
