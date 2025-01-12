@@ -142,7 +142,7 @@ def print_log_tables(r2_wo_logf, r2_w_logf):
                 deltas = df.loc['log_' + m] - df.loc[m]
                 nbetter = (deltas > 0).sum()
                 mean_d = deltas.mean()
-                pos = mean_d > 0
+                pos = mean_d >= 0.001
                 v = (
                     rf'$\phantom{{-}}\mathbf{{{mean_d:.3f}}}$' if pos else
                     rf'${mean_d:.3f}$'
@@ -232,8 +232,12 @@ def main(args: argparse.Namespace):
 
 
     # This is in line with the results in `print_log_tables()`
-    w_log_measures = {'range_videos', 'range_channels', 'frequency'}
-    wo_log_measures = {*w_log_measures, 'sort_gini_videos', 'sort_gini_channels'}
+    w_log_measures = {
+        'range_videos', 'range_channels',
+        'sort_gini_videos', 'sort_gini_channels',
+        'rosengren_s_videos', 'rosengren_s_channels',
+        'frequency'}
+    wo_log_measures = {*w_log_measures, 'sort_gini_categories'}
 
     # never significantly worse than log f, never worse more than by 0.01
     wo_good_measures = {'range_videos', 'range_channels'}
@@ -294,7 +298,9 @@ def main(args: argparse.Namespace):
     # r2_w_logf.loc['log_range_channels',:] = 0.45
     parts_w_mean_r2, *_ = measure_part_df_frequency_idx(r2_w_logf, w_log_measures, index=idx)
 
-    plt.figure(figsize=(11, 5))
+    # original NLP 2025 paper: plt.figure(figsize=(11, 5))
+
+    plt.figure(figsize=(9, 5))
 
     palette = sns.color_palette('viridis')
 
@@ -347,7 +353,7 @@ def main(args: argparse.Namespace):
             if f'{m}_{p}' in w_log_measures:
                 s += ' (log)'
             if f'{m}_{p}' in w_good_measures:
-                s += ' ★'
+                s += ' ★'   # star
             plt.text(x, y+0.01, s=s, fontsize=font_size, color='k', ha='center',
                      rotation='vertical')
 #             if f'{m}_{p}' in wo_log_measures:
@@ -376,14 +382,14 @@ def main(args: argparse.Namespace):
     legend1 = plt.legend(
         handles[:3], labels[:3],
         title='Single Variable (DM)', alignment='left',
-        bbox_to_anchor=(0.76, 0.0, 0.24, 0.0), loc='lower left', mode='expand',
+        bbox_to_anchor=(0.7, 0.0, 0.3, 0.0), loc='lower left', mode='expand',
         #loc='center right',
         framealpha=1
         )
     plt.legend(
         handles[3:], labels[3:],
         title='Two Variables (DM, log-freq.)', alignment='left',
-        bbox_to_anchor=(0.76, 0.23, 0.24, 0.0), loc='lower left', mode='expand',
+        bbox_to_anchor=(0.7, 0.23, 0.3, 0.0), loc='lower left', mode='expand',
         # bbox_to_anchor=(0, 0.575), loc='lower left',     # under legend1
         framealpha=1
         )

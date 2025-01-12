@@ -6,11 +6,6 @@ import sys
 import os
 import re
 from itertools import zip_longest
-
-import warnings
-warnings.simplefilter(action='ignore', category=FutureWarning)
-import pandas as pd
-
 from csv import QUOTE_NONE
 import numpy as np
 import wordfreq as wf  # word_frequency, tokenize, get_frequency_dict
@@ -28,6 +23,10 @@ from joblib import dump, load
 from frequency_data import FrequencyData, CountArrays, download_if_necessary
 from datasets import load_dataset, Dataset
 from spalex import get_spalex
+
+import warnings
+warnings.simplefilter(action='ignore', category=FutureWarning)
+import pandas as pd
 
 sys.path.append(os.path.join(os.path.dirname(__file__), os.pardir))
 
@@ -175,16 +174,16 @@ _MEASURE2SPEC_UNIT = {
     'weighted_range':       MeasureSpec(FrequencyData.weighted_range),
     'range_nofreq':         MeasureSpec(FrequencyData.range_nofreq),
     'range_nofreq_gries':   MeasureSpec(FrequencyData.range_nofreq_gries),
-    'gini':                 MeasureSpec(FrequencyData.gini_dispersion),
-    'sparse_gini':          MeasureSpec(FrequencyData.sparse_gini_dispersion),
+    # DELETEME 'gini':          MeasureSpec(FrequencyData.gini_dispersion),
+    # DELETEME 'sparse_gini':   MeasureSpec(FrequencyData.sparse_gini_dispersion),
     'sort_gini':            MeasureSpec(FrequencyData.sort_gini_dispersion),
-    'maxmin':               MeasureSpec(FrequencyData.maxmin_dispersion),
+    # DELETEME 'maxmin':               MeasureSpec(FrequencyData.maxmin_dispersion),
     'juilland_d':           MeasureSpec(FrequencyData.juilland_d),
     'vmr':                  MeasureSpec(FrequencyData.vmr_dispersion),
     'gries_dp':             MeasureSpec(FrequencyData.gries_dp_dispersion),
     'lyne_d3':              MeasureSpec(FrequencyData.lyne_d3),
     'rosengren_s':          MeasureSpec(FrequencyData.rosengren_s),
-    'sqrt':                 MeasureSpec(FrequencyData.rosengren_like_sqrt),
+    # DELETEME 'sqrt':                 MeasureSpec(FrequencyData.rosengren_like_sqrt),
     'carrol_d2':            MeasureSpec(FrequencyData.carrol_d2)
     }
 

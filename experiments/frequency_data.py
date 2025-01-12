@@ -442,6 +442,8 @@ class FrequencyData(NamedTuple):
                 np.zeros(1, dtype=cnt_f_totals.dtype),  # prepend with [0]
                 -np.sort(-cnt_f_totals).cumsum()        # sort descending; cumsum
                 ))
+        else:
+            cs_cnt_f_totals = None
 
         if CHECK_CASE:
             # w.islower() is False for CJK, so we use `w.lower()==w`:
@@ -520,19 +522,6 @@ class FrequencyData(NamedTuple):
     #         (count_w + 1) / (self.cnt_f_totals + len(f)),   # smooth_frequency
     #         count_w == 0                                    # missing
     #         )
-
-    def simple_smooth_cnt_frequencies(self, word: str) -> tuple[np.array, np.array]:
-        '''
-        Return non-zero floats: frequencies smoothed out for missing values,
-
-                              count(w) + 1
-        smooth_frequency(w) = ------------
-                              #tokens + 1
-
-        Note: This is NOT Laplace smoothing (uncorrected Laplace smoothing)
-        '''
-        return (self.cnt_f[word] + 1) / (self.cnt_f_totals + 1)
-
     # All of the following are defined so that:
     # - Values fall in [0, 1]
     # - Values = 1 or close to 1 correspond to maximum dispersion (distribution
@@ -657,10 +646,9 @@ class FrequencyData(NamedTuple):
         '''
 
         if sort:
-            assert not smooth
             f = self.cnt_f
             if word not in f:
-                return 0.0                              # no dispersion
+                return 1 / (len(self.cnt_f_totals) + 1) if smooth else 0.0  # no dispersion
             f_w = f[word]
             if not isinstance(f_w, pd.arrays.SparseArray):
                 f_w = pd.arrays.SparseArray(f_w)
@@ -677,9 +665,12 @@ class FrequencyData(NamedTuple):
 
             coef = np.arange(n - 2 * nnz + 1, n, 2)
 
+            if smooth:
+                n += 1
             g = 1 - (coef * f_w).sum() / n
 
         elif sparse:
+            raise Exception('Do not use, TODO DELETEME.')
             assert not smooth
             f = self.cnt_f
             if word not in f:
@@ -701,6 +692,7 @@ class FrequencyData(NamedTuple):
             assert not weight
             g = 1 - abs(as_rows - as_cols).sum() / (2 * n)
         else:
+            raise Exception('Do not use, TODO DELETEME.')
             if smooth:
                 f_w = self.simple_smooth_cnt_frequencies(word)
             else:
@@ -733,6 +725,7 @@ class FrequencyData(NamedTuple):
         return g
 
     def maxmin_dispersion(self, word: str, smooth: bool = False) -> float:
+        raise Exception('Do not use, TODO DELETEME.')
         if smooth:
             f_w = self.simple_smooth_cnt_frequencies(word)
         else:
@@ -747,39 +740,41 @@ class FrequencyData(NamedTuple):
     def juilland_d(self, word: str, smooth: bool = False) -> float:
         # ~ variation coefficient
 
-        if smooth:
-            f_w = self.simple_smooth_cnt_frequencies(word)
-        else:
-            f = self.cnt_f
-            if word not in f:
-                return 0.0                              # no dispersion
-            f_w = f[word] / self.cnt_f_totals           # normalize by unit
+        f = self.cnt_f
+        if word not in f:
+            return 1 / (len(self.cnt_f_totals) + 1) if smooth else 0.0   # no dispersion
+        f_w = f[word] / self.cnt_f_totals           # normalize by unit
 
         # Do not normalize by word: no effect on VC = SD / mean:
         vc = np.std(f_w) / np.mean(f_w)
-        return 1 - vc / np.sqrt(len(f_w) - 1)   # D
+        n = len(f_w)
+        d = 1 - vc / np.sqrt(n - 1)
+        if not smooth:
+            return d
+        return (d * n + 1) / (n + 1)
 
     def vmr_dispersion(self, word: str, smooth: bool = False) -> float:
         # https://en.wikipedia.org/wiki/Index_of_dispersion
         # variance-to-mean ratio (VMR)
 
-        if smooth:
-            f_w = self.simple_smooth_cnt_frequencies(word)
-        else:
-            f = self.cnt_f
-            if word not in f:
-                return 0.0                              # no dispersion
-            f_w = f[word] / self.cnt_f_totals           # normalize by unit
+        f = self.cnt_f
+        if word not in f:
+            return 1 / (len(self.cnt_f_totals) + 1) if smooth else 0.0   # no dispersion
+        f_w = f[word] / self.cnt_f_totals           # normalize by unit
 
         f_w /= f_w.sum()                        # Normalize by word => 0..1 range
 
         vmr = np.var(f_w) / np.mean(f_w)
-        return 1 - vmr
+        d = 1 - vmr
+        if not smooth:
+            return d
+        n = len(f_w)
+        return (d * n + 1) / (n + 1)
 
     def gries_dp_dispersion(self, word: str, smooth: bool = False) -> float:
         f = self.cnt_f
         if not smooth and word not in f:
-            return 0.0                                  # no dispersion
+            return 1 / (len(self.cnt_f_totals) + 1) if smooth else 0.0    # no dispersion
         f_w = f[word]
 
         f_totals    = self.cnt_f_totals
@@ -793,12 +788,16 @@ class FrequencyData(NamedTuple):
         word_prop   = f_w / f_w.sum()
 
         # Return 1 - DP (= D_P in Egbert et al.(2020))
-        return 1 - np.sum(np.abs(word_prop - cat_prop)) / 2
+        d = 1 - np.sum(np.abs(word_prop - cat_prop)) / 2
+        if not smooth:
+            return d
+        n = len(f_w)
+        return (d * n + 1) / (n + 1)
 
     def lyne_d3(self, word: str, smooth: bool = False) -> float:
         f = self.cnt_f
         if not smooth and word not in f:
-            return 0.0                                  # no dispersion
+            return 1 / (len(self.cnt_f_totals) + 1) if smooth else 0.0    # no dispersion
         f_w = f[word]
 
         f_totals    = self.cnt_f_totals
@@ -811,44 +810,45 @@ class FrequencyData(NamedTuple):
         cat_prop    = f_totals / f_totals.sum()
         word_prop   = f_w / f_w.sum()
 
-        return 1 - np.sum((word_prop - cat_prop)**2) / 4
+        d = 1 - np.sum((word_prop - cat_prop)**2) / 4
+        if not smooth:
+            return d
+        n = len(f_w)
+        return (d * n + 1) / (n + 1)
 
     def rosengren_s(self, word: str, smooth: bool = False) -> float:
-        if smooth:
-            f_w = self.simple_smooth_cnt_frequencies(word)
-        else:
-            f = self.cnt_f
-            if word not in f:
-                return 0.0                              # no dispersion
-            f_w = f[word] / self.cnt_f_totals           # normalize by unit
+        f = self.cnt_f
+        if word not in f:
+            return 1 / (len(self.cnt_f_totals) + 1) if smooth else 0.0    # no dispersion
+        f_w = f[word] / self.cnt_f_totals           # normalize by unit
 
         # We normalize by word before the final computation, as this will make the
         # numbers larger, resulting in better precision:
         f_w /= f_w.sum()                            # normalize by word
-        return np.sqrt(f_w).sum() ** 2 / len(f_w)
-
-    def rosengren_like_sqrt(self, word: str, smooth: bool = False) -> float:
+        n = len(f_w)
         if smooth:
-            f_w = self.simple_smooth_cnt_frequencies(word)
-        else:
-            f = self.cnt_f
-            if word not in f:
-                return 0.0                              # no dispersion
-            f_w = f[word] / self.cnt_f_totals           # normalize by unit
+            return (np.sqrt(f_w).sum() ** 2 + 1) / (n + 1)
+        return np.sqrt(f_w).sum() ** 2 / n
 
-        # We normalize by word before the final computation, as this will make the
-        # numbers larger, resulting in better precision:
-        f_w /= f_w.sum()                            # normalize by word
-        return np.sqrt(f_w).sum() / len(f_w)    # removed ** 2
+    # def rosengren_like_sqrt(self, word: str, smooth: bool = False) -> float:
+    #     f = self.cnt_f
+    #     if word not in f:
+    #         return 1 / (len(self.cnt_f_totals) + 1) if smooth else 0.0    # no dispersion
+    #     f_w = f[word] / self.cnt_f_totals           # normalize by unit
+    #
+    #     # We normalize by word before the final computation, as this will make the
+    #     # numbers larger, resulting in better precision:
+    #     f_w /= f_w.sum()                            # normalize by word
+    #     n = len(f_w)
+    #     if smooth:
+    #         return (np.sqrt(f_w).sum() + 1) / (n + 1)
+    #     return np.sqrt(f_w).sum() / n
 
     def carrol_d2(self, word: str, smooth: bool = False) -> float:
-        if smooth:
-            f_w = self.simple_smooth_cnt_frequencies(word)
-        else:
-            f = self.cnt_f
-            if word not in f:
-                return 0.0                              # no dispersion
-            f_w = f[word] / self.cnt_f_totals           # normalize by unit
+        f = self.cnt_f
+        if word not in f:
+            return 1 / (len(self.cnt_f_totals) + 1) if smooth else 0.0    # no dispersion
+        f_w = f[word] / self.cnt_f_totals           # normalize by unit
 
         # We normalize by word before the final computation, as this will make the
         # numbers larger, resulting in better precision:
@@ -860,7 +860,11 @@ class FrequencyData(NamedTuple):
 
         # 1 ~ max entropy ~ max dispersion
         # Same as \eta (efficiency) in information theory
-        return entropy / np.log(len(f_w))           # do NOT ignore zeros here
+        n = len(f_w)
+        d = entropy / np.log(n)           # do NOT ignore zeros here
+        if not smooth:
+            return d
+        return (d * n + 1) / (n + 1)
 
     @staticmethod
     def _open(
