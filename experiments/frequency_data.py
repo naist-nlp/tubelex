@@ -830,6 +830,26 @@ class FrequencyData(NamedTuple):
             return (np.sqrt(f_w).sum() ** 2 + 1) / (n + 1)
         return np.sqrt(f_w).sum() ** 2 / n
 
+    def rosengren_sx(self, word: str, smooth: bool = False) -> float:
+        '''
+        Part-size adjustment as done originally by Rosengren.
+        '''
+        f = self.cnt_f
+        if word not in f:
+            return 1 / (len(self.cnt_f_totals) + 1) if smooth else 0.0    # no dispersion
+        f_w         = f[word]                   # Rosengren: "x"
+        f_totals    = self.cnt_f_totals
+        cat_prop    = f_totals / f_totals.sum() # Rosengren: "d"
+
+        # Rosengren's original adjustment (p. 119): more weight to larger
+        # parts/categories:
+        s = np.sqrt(cat_prop * f_w).sum() ** 2 / f_w.sum()
+
+        if smooth:
+            n = len(f_w)
+            return (s * n + 1) / (n + 1)
+        return s
+
     # def rosengren_like_sqrt(self, word: str, smooth: bool = False) -> float:
     #     f = self.cnt_f
     #     if word not in f:

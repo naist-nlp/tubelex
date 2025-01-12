@@ -183,6 +183,7 @@ _MEASURE2SPEC_UNIT = {
     'gries_dp':             MeasureSpec(FrequencyData.gries_dp_dispersion),
     'lyne_d3':              MeasureSpec(FrequencyData.lyne_d3),
     'rosengren_s':          MeasureSpec(FrequencyData.rosengren_s),
+    'rosengren_sx':         MeasureSpec(FrequencyData.rosengren_sx),
     # DELETEME 'sqrt':                 MeasureSpec(FrequencyData.rosengren_like_sqrt),
     'carrol_d2':            MeasureSpec(FrequencyData.carrol_d2)
     }
