@@ -779,11 +779,6 @@ class FrequencyData(NamedTuple):
 
         f_totals    = self.cnt_f_totals
 
-        if smooth:
-            # Smoothing as if using simple_smooth_cnt_frequencies().
-            # Note: Avoid += so that we do not overwrite original values in dict.
-            f_w         = f_w + 1
-            f_totals    = f_totals + 1
         cat_prop    = f_totals / f_totals.sum()
         word_prop   = f_w / f_w.sum()
 
@@ -802,11 +797,6 @@ class FrequencyData(NamedTuple):
 
         f_totals    = self.cnt_f_totals
 
-        if smooth:
-            # Smoothing as if using simple_smooth_cnt_frequencies().
-            # Note: Avoid += so that we do not overwrite original values in dict.
-            f_w         = f_w + 1
-            f_totals    = f_totals + 1
         cat_prop    = f_totals / f_totals.sum()
         word_prop   = f_w / f_w.sum()
 
