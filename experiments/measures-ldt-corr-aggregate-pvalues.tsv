@@ -33,13 +33,13 @@ log_range_channels	0.000000	0.000000	0.030170
 log_sort_gini_channels	0.000000	0.000000	0.000000
 log_juilland_d_channels	0.000000	0.000000	0.000000
 log_gries_dp_channels	0.000000	0.000000	0.000000
-log_rosengren_s_channels	0.000000	0.000000	0.000000
+log_rosengren_s_channels	0.923118	0.000000	0.000000
 log_carrol_d2_channels	0.000000	0.000000	0.000000
 log_lyne_d3_channels	0.000000	0.000000	0.000000
 log_range_videos	0.000000	0.000000	0.000001
 log_sort_gini_videos	0.000000	0.000000	0.000000
 log_juilland_d_videos	0.000000	0.000000	0.000000
 log_gries_dp_videos	0.000000	0.000000	0.000000
-log_rosengren_s_videos	0.000000	0.000000	0.000000
+log_rosengren_s_videos	0.004070	0.000000	0.000952
 log_carrol_d2_videos	0.000000	0.000000	0.000000
 log_lyne_d3_videos	0.000000	0.000000	0.000000
