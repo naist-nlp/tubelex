@@ -24,31 +24,40 @@ for task in mlsp ldt fam
 	echo "TASK: $task"
 	echo '==========='
 	echo
-	for measure in frequency range_videos range_channels range_categories \
-		weighted_range gini maxmin ada juilland_d vmr gries_dp gries_dp_eq \
-		rosengren_s carrol_d2 # simple_frequency, sqrt
+	
+	for measure_method in frequency range maxmin juilland_d \
+		vmr gries_dp rosengren_s carrol_d2 # TODO DELETEME gini simple_frequency, sqrt weighted_range
 	do
-		for transform_opt in '--log-measure --smooth' '' # '--sqrt-measure --zero-clip'
+		for measure_variant in '' # TODO TODO '_videos' '_channels' # TODO TODO
 		do
-			cache_opt=''
-			if [[ -n "$transform_opt" ]]
+			if [[ "$measure_method" = 'frequency' ]] && [[ -n "$measure_variant" ]]
 			then
-				if [[ "$transform_opt" = '--sqrt-measure --zero-clip' ]]
-				then
-					mname="sqrt_${measure}"
-				else
-					if [[ "$measure" = 'frequency' ]]
-					then
-						# Cache LOG frequency
-						cache_opt="--cache"
-					fi
-					mname="log_${measure}"
-				fi
-			else
-				mname="$measure"
+				# No variants for frequency:
+				continue
 			fi
-			echo "$mname"
-			python experiments/run.py $cache_opt $transform_opt --measure $measure --tubelex $langs --corr --$task $langs > experiments/measures-${task}-corr-tubelex-${mname}.tsv
+			measure="${measure_method}${measure_variant}"
+			for transform_opt in '--log-measure --smooth' '' # '--sqrt-measure --zero-clip'
+			do
+				cache_opt=''
+				if [[ -n "$transform_opt" ]]
+				then
+					if [[ "$transform_opt" = '--sqrt-measure --zero-clip' ]]
+					then
+						mname="sqrt_${measure}"
+					else
+						if [[ "$measure" = 'frequency' ]]
+						then
+							# Cache LOG frequency
+							cache_opt='--cache'
+						fi
+						mname="log_${measure}"
+					fi
+				else
+					mname="${measure}"
+				fi
+				echo "$mname"
+				python experiments/run.py $cache_opt $transform_opt --measure $measure --tubelex $langs --corr --$task $langs > experiments/measures-${task}-corr-tubelex-${mname}.tsv
+			done
 		done
 	done
 done

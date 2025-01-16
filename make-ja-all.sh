@@ -3,7 +3,7 @@
 #SBATCH -J tubelex-ja-all
 #SBATCH -A lang
 #SBATCH -p lang_short
-#SBATCH -c1
+#SBATCH -c96
 
 # Exit on error:
 set -e

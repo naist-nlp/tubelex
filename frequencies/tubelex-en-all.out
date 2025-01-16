@@ -1,0 +1,14 @@
+[stanza]
+
+
+
+
+Frequency counting stats:
+ 172457887 tokens counted
+ 185302 replacements for <cc_desc>
+ 23124 replacements for <web>
+ 31098 replacements for <censored>
+ 1659 replacements for <email>
+ 1609 replacements for <handle>
+
+Warning: Possible markup "align" found among top 6000 words with frequency 2204, in *-nfkc-lower.

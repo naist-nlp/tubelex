@@ -106,7 +106,8 @@ MEASURE2NAME = {
     'sort_gini':    'Gini Index',
     'juilland_d':   'Juilland\'s $D$',
     'gries_dp':     'Gries\'s DP',
-    'rosengren_s':  'Rosengren\'s $S$',
+    'rosengren_s':  r"Rosengren's $S$",
+    'rosengren_sx': r"Rosengren's $S^{\text{x}}$",
     'carrol_d2':    'Carroll\'s $D_2$',
     'lyne_d3':      'Lyne\'s $D_3$',
     'frequency':    'Frequency'

@@ -28,7 +28,7 @@ for task in fam
 	for measure_method in rosengren_sx range lyne_d3 juilland_d vmr gries_dp rosengren_s carrol_d2
 		# TODO sorted_gini separately DELETEME simple_frequency, sqrt weighted_range
 	do
-		for measure_variant in '_channels'
+		for measure_variant in ''
 		do
 			if [[ "$measure_method" = 'frequency' ]] && [[ -n "$measure_variant" ]]
 			then
@@ -36,7 +36,7 @@ for task in fam
 				continue
 			fi
 			measure="${measure_method}${measure_variant}"
-			for transform_opt in '--log-measure --smooth' #'' # '--sqrt-measure --zero-clip'
+			for transform_opt in '' '--log-measure --smooth' #'' # '--sqrt-measure --zero-clip'
 			do
 				cache_opt=''
 				if [[ -n "$transform_opt" ]]

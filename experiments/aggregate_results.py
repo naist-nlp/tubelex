@@ -58,6 +58,7 @@ MEASURES = [
 #     'vmr',
     'gries_dp',
     'rosengren_s',
+    'rosengren_sx',
     'carrol_d2',
     'lyne_d3',
     ]
