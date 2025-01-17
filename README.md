@@ -1,8 +1,12 @@
 # About TUBELEX
 
-TUBELEX is a YouTube subtitle corpus currently available for Chinese, English, Indonesian, Japanese, and Spanish.
+TUBELEX is a multi-lingual YouTube subtitle corpus. It currently provides data for Chinese, English, Indonesian, Japanese, and Spanish.
 
-Please read and cite [our preprint](https://arxiv.org/abs/2410.03240):
+Word frequency in TUBELEX provides an approximation of everyday languages exposure comparable to, and often better than other resources, such as written corpora, Wikipedia, or film subtitle corpora (SUBTLEX, OpenSubtitles).
+
+You may find TUBELEX useful for NLP applications modeling human familiarity with words, e.g. readability, text simplification, or language learning applications. TUBELEX log-frequencies are highly correlated with psycholinguistic data (lexical decision time, word familiarity) and lexical complexity.
+
+Read [our paper](https://arxiv.org/abs/2410.03240) (to be presented at COLING 2025) for more details:
 ```
 @article{nohejl_etal_2024_film,
   title={Beyond {{Film Subtitles}}: {{Is YouTube}} the {{Best Approximation}} of {{Spoken Vocabulary}}?},
@@ -12,15 +16,114 @@ Please read and cite [our preprint](https://arxiv.org/abs/2410.03240):
 }
 ```
 
-This repository provides full source code for the project and [word frequency lists](frequencies). We also provide the following models on Hugging Face Hub:
+This repository provides full source code for the project and word frequency lists. We also provide the following models on Hugging Face Hub:
 
 - [fastText word embeddings](https://huggingface.co/naist-nlp/tubelex-fasttext)
 - [KenLM n-gram models](https://huggingface.co/naist-nlp/tubelex-kenlm)
 
+Note that the full text of the corpus cannot be published for copyright reasons. To enable use of TUBELEX in a wide range of applications, we offer frequency lists in multiple variants and the two above-mentioned types of basic language models. The frequency lists also include frequencies by video category, and dispersion (range or "contextual diversity").
 
-# Replicating Experiments
+## Word Frequency Lists
 
-To replicate our experiments you will need the following files placed in the data directory. We could not distribute them because their license wasn't clear or didn't allow redistribution:
+Frequency lists in the default tokenization and normalization for the impatient:
+
+- [Chinese](frequency/tubelex-zh.tsv.xz)
+- [English](frequency/tubelex-en.tsv.xz)
+- [Indonesian](frequency/tubelex-id.tsv.xz)
+- [Japanese](frequency/tubelex-ja.tsv.xz)
+- [Spanish](frequency/tubelex-es.tsv.xz)
+
+All TUBELEX frequency files are TSV files compressed with LZMA (`xz`) with the following columns:
+
+- `word` – the word (see below for tokenization/lemmatization and normalization),
+- `count` – number of occurrences of the word,
+- `videos` – number of videos containing the word,
+- `channels` – number of channels the word occurrs in,
+- `count:`*C* – number of occurrences of the word in the YouTube video category *C*.
+
+All files also provide a row of totals as the last row (`[TOTAL]`).
+
+The columns `videos`, `channels` provide dispersion information as count of corpus parts, in which each word occurs in. It can also be easily determined for categories using the columns `count:`*C*. This measure of dispersion is called range, contextual diversity, or document frequency. You might want to try the logarithm of `channels` as a feature for your model instead of log-frequency.
+
+We provide the following [word frequency lists](frequencies) described in our paper for each language identified with a 2-letter ISO code *L*:
+
+- default: `tubelex-`*L*`.tsv.xz` (for *L* in `en`, `es`, `id`, `ja`, `zh`; direct links to each above)
+- base: `tubelex-`*L*`-base-pos.tsv.xz` (for *L* = `ja`)
+- lemma: `tubelex-`*L*`-lemma-pos.tsv.xz` (for *L* in `en`, `es`, `id`, `ja`)
+- regex: `tubelex-`*L*`-regex.tsv.xz` (for *L* in `en`, `es`, `id`)
+
+Note that the `lemma` and `base` variants contain the majority POS for each lemma (base form) in the additional column `pos`.
+
+Additionally, we provide:
+
+- segmentation using UniDic 3.1.0 (instead of `unidic-lite`) for Japanese as `tubelex-ja-310.tsv.xz`, `tubelex-ja-310-lemma-pos.tsv.xz`, `tubelex-ja-310-base-pos.tsv.xz`,
+- Penn Treebank segmentation for English as `tubelex-en-treebank.tsv.xz`,
+- frequencies with majority POS information for each word for Chinese as `tubelex-zh-pos.tsv.xz`.
+
+All of the above are lowercased and Unicode NFKC normalized (as described in our paper). We also provide [variants of the above files with alternative normalizations](frequencies/alternative-normalizations) with filenames with the following suffixes:
+
+- only lowercased: `_lower.tsv.xz`,
+- only normalized to NFKC: `_nfkc.tsv.xz`,
+- no normalization: `_no-normalization.tsv.xz`.
+
+## Ongoing Work
+
+We are currently working on:
+
+- extending TUBELEX to more languages,
+- acquiring larger corpora for each language,
+- acquiring more metadata and information that we could make public,
+- investigating dispersion measures based on TUBELEX ([preprint](https://arxiv.org/abs/2501.06536)).
+
+
+## (Re)constructing the Corpus
+
+You can re-construct TUBELEX by following the steps below. By modifying the scripts, it is possible to construct corpora for other languages or with different parameters (larger size, different tokenizations etc.)
+
+1. Install the Git submodule for scraping data from YouTube (forked from JTubeSpeech):
+
+    ```git submodule init && git submodule update```
+    
+    
+    Note that the forked submodule is substantially different from JTubeSpeech, and can run most of the steps in parallel.
+    
+2. Install requirements (see [requirements.txt](requirements.txt)). The `unidic` package (as opposed to `unidic-lite`) requires an additional installation step:
+	
+	```python -m unidic download```
+
+3. Download manual subtitles:
+
+	a. Make search words based on Wikipedia:
+  
+		```
+		bash make_search_words.sh               # default languages
+		bash make_search_words.sh L1 L2 ... LN  # lanuages with the listed 2-letter codes
+		```
+		
+		This will results in a file `word/tasks.csv` being created with chunks of the search words lists for the next step.
+		
+	b. TODO (work in progress)
+
+5. Clean, remove duplicates and compute frequencies saving output with LZMA compression in the current directory:
+    
+    ```
+    python tubelex.py -x --clean --unique
+    python tubelex.py -x --frequencies -o tubelex-ja%.tsv.xz
+    python tubelex.py -x --frequencies -D unidic -o tubelex-ja-310%.tsv.xz
+    ```
+
+6. Alternatively, consult the help and process the files as you see fit:
+
+    ```python tubelex.py --help```
+    
+7. Optionally remove the language identification model, intermediate files, and the downloaded subtitles to save disk space:
+
+    ```rm *.ftz *.zip; rm -r jtubespeech/video```
+
+
+## Replicating the Experiments
+
+To replicate the experiments in our paper you will need the following files placed in the data directory. We could not distribute them because their license wasn't clear or didn't allow redistribution:
 
 - [Word GINI](https://sociocom.naist.jp/word-gini-en/) files `GINI_en.csv` and `GINI_ja.csv`,
 - `elexicon.csv` file available via word generation form at the [English Lexicon Project](https://elexicon.wustl.edu),
