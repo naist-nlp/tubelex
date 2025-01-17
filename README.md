@@ -21,7 +21,7 @@ This repository provides full source code for the project and word frequency lis
 - [fastText word embeddings](https://huggingface.co/naist-nlp/tubelex-fasttext)
 - [KenLM n-gram models](https://huggingface.co/naist-nlp/tubelex-kenlm)
 
-Note that the full text of the corpus cannot be published for copyright reasons. To enable use of TUBELEX in a wide range of applications, we offer frequency lists in multiple variants and the two above-mentioned types of basic language models. The frequency lists also include frequencies by video category, and dispersion (range or "contextual diversity").
+Note that the full text of the corpus cannot be published for copyright reasons. To enable use of TUBELEX in a wide range of applications, we offer frequency lists in multiple variants and the two above-mentioned types of basic language models. The frequency lists also include frequencies by video category, and dispersion (range or “contextual diversity”).
 
 ## Word Frequency Lists
 
@@ -95,12 +95,12 @@ You can re-construct TUBELEX by following the steps below. By modifying the scri
 
 	a. Make search words based on Wikipedia:
   
-		```
-		bash make_search_words.sh               # default languages
-		bash make_search_words.sh L1 L2 ... LN  # lanuages with the listed 2-letter codes
-		```
+	  ```
+	  bash make_search_words.sh               # default languages
+	  bash make_search_words.sh L1 L2 ... LN  # lanuages with the listed 2-letter codes
+	  ```
 		
-		This will results in a file `word/tasks.csv` being created with chunks of the search words lists for the next step.
+	  This will results in a file `word/tasks.csv` being created with chunks of the search words lists for the next step.
 		
 	b. TODO (work in progress)
 
@@ -123,7 +123,7 @@ You can re-construct TUBELEX by following the steps below. By modifying the scri
 
 ## Replicating the Experiments
 
-To replicate the experiments in our paper you will need the following files placed in the data directory. We could not distribute them because their license wasn't clear or didn't allow redistribution:
+To replicate the experiments in our paper you will need the following files placed in the `data` directory. We could not distribute them because their license wasn't clear or didn't allow redistribution:
 
 - [Word GINI](https://sociocom.naist.jp/word-gini-en/) files `GINI_en.csv` and `GINI_ja.csv`,
 - `elexicon.csv` file available via word generation form at the [English Lexicon Project](https://elexicon.wustl.edu),
@@ -133,7 +133,25 @@ To replicate the experiments in our paper you will need the following files plac
 - `es-alonso-oral-freq.tsv`, available online as a supplementary material for [Spanish oral frequencies by Alonso et al. 2011](https://link.springer.com/article/10.3758/s13428-011-0062-3#SecESM1), concatenated two “columns” into one and exported to UTF-8 TSV,
 - `es-guasch.csv`, [Spanish norms (Guasch et al., 2014)](https://link.springer.com/article/10.3758/s13428-015-0684-y#Sec13) database, available online as a supplementary Excel file "ESM 1", converted to UTF-8 CSV (using Excel), 
 - `es-moreno-martinez.csv`, [Spanish norms (Moreno-Martínez et al., 2014)](https://link.springer.com/article/10.3758/s13428-013-0435-x#Sec22) database, available online as a supplementary Excel file "ESM 1", converted to UTF-8 CSV (using Excel),
-- `Lexeed.txt`, file available from the CD-ROM accompanying [NTT Database Series: Lexical Properties of Japanese](https://ci.nii.ac.jp/ncid/BA44537988) by Amano Shigeaki and Kondo Tadahisa (1999-2022), i.e. the Heisei edition of the database.
+- `amano-kondo-1999-ntt/*.csv`, CSV files of the tables from the [Amano-Kondo NTT database (1999)](https://ci.nii.ac.jp/ncid/BA44537988). You can extract the files from the first CD-ROM containing a Windows installer like this:
+
+  ```
+  # The CD contains a Win98 installer, which decompresses and installs files on your
+  # computer. The files are a database and a program to browse the database.
+  # Here we just decompress the database (DB0001.MDB) and extract tables from it as CSV.
+  # To do so, you will first need to install two software packages (via brew).
+  
+  # Install 7zz (sevenzip) and mdbtools:
+  brew install sevenzip mdbtools
+  
+  # Decompress:
+  7zz x CD1/DB0001.MD_ -so > DB0001.MDB
+  
+  # Extract tables as CSV:
+  mkdir amano-kondo-1999-ntt
+  for t in $(mdb-tables DB0001.MDB); do mdb-export DB0001.MDB $t > "amano-kondo-1999-ntt/${t}.csv"; done
+  ```
+
 - `subimdb.tsv` file, which you can generate by first downloading and extracting the [SubIMDB](https://zenodo.org/records/2552407/files/SubIMDB_All_Individual.tar?download=1) corpus into the `SubIMDB_All_Individual` directory, and then compiling the frequency list with the following command:
 
     ```python tubelex.py --lang en --frequencies --tokenized-files SubIMDB_All_Individual/subtitles -o data/subimdb.tsv```
