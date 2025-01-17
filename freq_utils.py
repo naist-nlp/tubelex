@@ -15,10 +15,10 @@ import argparse
 import sys
 
 NORMALIZED_SUFFIX_FNS = (
-    (False, '', None),
-    (True, '-lower', lambda w: w.lower()),
-    (True, '-nfkc', lambda w: unicode_normalize('NFKC', w)),
-    (True, '-nfkc-lower', lambda w: unicode_normalize('NFKC', w).lower())
+    (False, '_no-normalization', None),
+    (True, '_lower', lambda w: w.lower()),
+    (True, '_nfkc', lambda w: unicode_normalize('NFKC', w)),
+    (True, '', lambda w: unicode_normalize('NFKC', w).lower())
     )
 TOTAL_LABEL = '[TOTAL]'
 

@@ -79,7 +79,7 @@ def tubelex_out2dict(
 
 
 TUBELEX_OUT_RE = r'tubelex-(?P<lang>[a-z]+)\.out'
-TUBELEX_FREQ_RE = r'tubelex-(?P<lang>[a-z]+)(-(?P<id>[a-z-]+))?-nfkc-lower\.tsv\.xz'
+TUBELEX_FREQ_RE = r'tubelex-(?P<lang>[a-z]+)(-(?P<id>[a-z-]+))?\.tsv\.xz'
 TOTAL_ROW = '[TOTAL]'
 
 

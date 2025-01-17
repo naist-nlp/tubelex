@@ -306,7 +306,7 @@ def get_tubelex_freq_data(
         )
 
     return FrequencyData.from_file_url(
-        filename=f'frequencies/tubelex-{language}-nfkc-lower.tsv.xz',
+        filename=f'frequencies/tubelex-{language}.tsv.xz',
         total_row=True,
         cols=cols
         )
