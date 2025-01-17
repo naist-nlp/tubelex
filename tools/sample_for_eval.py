@@ -6,6 +6,10 @@ import re
 from typing import Optional
 import pandas as pd
 from vtt import vtt2cues
+from sklearn.model_selection import train_test_split
+from yt_dlp import YoutubeDL
+
+sys.path.append(os.path.join(os.path.dirname(__file__), os.pardir))
 from freq_utils import Storage
 from tubelex import (
     SUBLIST_PATH_FMT,
@@ -19,8 +23,6 @@ from tubelex import (
     PAT_INVALID_TAG
     )
 import numpy as np
-from sklearn.model_selection import train_test_split
-from yt_dlp import YoutubeDL
 
 
 N_TIMES = 3

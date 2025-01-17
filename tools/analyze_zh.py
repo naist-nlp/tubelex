@@ -1,13 +1,17 @@
 import argparse
+
+from collections import Counter
+from typing import Optional
+from tqdm import tqdm
+import hanzidentifier as hzid
+
+sys.path.append(os.path.join(os.path.dirname(__file__), os.pardir))
 from freq_utils import Storage
 from tubelex import (
     UNIQUE_PATH_FMT,
     get_files_contents,
     )
-from collections import Counter
-from typing import Optional
-from tqdm import tqdm
-import hanzidentifier as hzid
+
 
 '''
 Usage (for LZMA compression):

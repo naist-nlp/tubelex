@@ -5,6 +5,8 @@ import argparse
 # from typing import Optional
 import pandas as pd
 from pandas.io.formats.style import Styler
+
+sys.path.append(os.path.join(os.path.dirname(__file__), os.pardir))
 from latex_utils import colapse_latex_table_header
 
 # from vtt import vtt2cues

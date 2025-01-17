@@ -7,5 +7,5 @@
 
 for lang in en es id zh ja
 do
-	python sample_for_eval.py --lang $lang -x
+	python tools/sample_for_eval.py --lang $lang -x
 done
