@@ -95,47 +95,47 @@ You can re-construct TUBELEX by following the steps below. By modifying the scri
 
 Do the following substeps in the `jtubespeech-subtitles` subdirectory:
 
-	a. Make search words based on Wikipedia:
+  a. Make search words based on Wikipedia:
   
-	  ```
-	  bash make_search_words.sh
-	  ```
-		
-	  This will create a file `word/tasks.csv` being created with chunks of the search words lists for the next step.
-		
-	b. Get video IDs by searching for the collected words:
-	
-	  ```
-	  bash obtain_video_id_parallel.sh
-	  ```
-	  
-	  This will automatically run Python scripts in parallel (using GNU `parallel`), one for each of your CPUs.
-	  
-	c. Prepare tasks for the next step:
-	
-	  ```
-	  bash prepare_tasks_from_obtained.sh
-	  ```
-	  
-	  This will create files named `videoid/tasks_enesidjazh_part`*XXXXXX*, where *XXXXXX* are numbers from 0 to *N* - 1 (depending on the number of videos found).
-	
-	d. Retrieve subtitle metadata: As this takes a relatively long time, we have divided this step into many tasks, that you can run (optionally in paralell). Each task can be expected to run a few hours. For *i* in 0 to *N* - 1, run the tasks prepared in the previous step:
-	
-	  ```
-	  bash retrieve_subtitle_exists.sh *i*
-	  ```
-	
-	e. Sample 120.000 subtitle files fulfilling the inclusion criteria for each language:
-	
-	  ```
-	  sample.sh
-	  ```
-	
-	f. Download the subtitles:
+    ```
+    bash make_search_words.sh
+    ```
+    
+    This will create a file `word/tasks.csv` being created with chunks of the search words lists for the next step.
+    
+  b. Get video IDs by searching for the collected words:
+  
+    ```
+    bash obtain_video_id_parallel.sh
+    ```
+    
+    This will automatically run Python scripts in parallel (using GNU `parallel`), one for each of your CPUs.
+    
+  c. Prepare tasks for the next step:
+  
+    ```
+    bash prepare_tasks_from_obtained.sh
+    ```
+    
+    This will create files named `videoid/tasks_enesidjazh_part`*XXXXXX*, where *XXXXXX* are numbers from 0 to *N* - 1 (depending on the number of videos found).
+  
+  d. Retrieve subtitle metadata: As this takes a relatively long time, we have divided this step into many tasks, that you can run (optionally in paralell). Each task can be expected to run a few hours. For *i* in 0 to *N* - 1, run the tasks prepared in the previous step:
+  
+    ```
+    bash retrieve_subtitle_exists.sh *i*
+    ```
+  
+  e. Sample 120.000 subtitle files fulfilling the inclusion criteria for each language:
+  
+    ```
+    sample.sh
+    ```
+  
+  f. Download the subtitles:
 
-	  ```
-	  bash download_video_parallel.sh
-	  ```
+    ```
+    bash download_video_parallel.sh
+    ```
 
 5. Clean, remove duplicates and compute frequencies saving output with LZMA compression in the current directory:
     
