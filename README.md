@@ -76,7 +76,7 @@ We are currently working on:
 - investigating dispersion measures based on TUBELEX ([preprint](https://arxiv.org/abs/2501.06536)).
 
 
-## (Re)constructing the Corpus
+## How to (Re)Constructing the Corpus
 
 You can re-construct TUBELEX by following the steps below. By modifying the scripts, it is possible to construct corpora for other languages or with different parameters (larger size, different tokenizations etc.)
 
@@ -91,18 +91,51 @@ You can re-construct TUBELEX by following the steps below. By modifying the scri
 	
 	```python -m unidic download```
 
-3. Download manual subtitles:
+3. Scrape manual subtitles. The process consists of several substeps, which we have parallelized using shell scripts and GNU `parallel`. To adjust it to your environment, inspect the shell scripts and change the parameters as necessary. Although we have changed the internal workings of the [original JTubeSpeech](https://github.com/sarulab-speech/jtubespeech) scripts a little, you may also find their outline of the process helpful.
+
+Do the following substeps in the `jtubespeech-subtitles` subdirectory:
 
 	a. Make search words based on Wikipedia:
   
 	  ```
-	  bash make_search_words.sh               # default languages
-	  bash make_search_words.sh L1 L2 ... LN  # lanuages with the listed 2-letter codes
+	  bash make_search_words.sh
 	  ```
 		
-	  This will results in a file `word/tasks.csv` being created with chunks of the search words lists for the next step.
+	  This will create a file `word/tasks.csv` being created with chunks of the search words lists for the next step.
 		
-	b. TODO (work in progress)
+	b. Get video IDs by searching for the collected words:
+	
+	  ```
+	  bash obtain_video_id_parallel.sh
+	  ```
+	  
+	  This will automatically run Python scripts in parallel (using GNU `parallel`), one for each of your CPUs.
+	  
+	c. Prepare tasks for the next step:
+	
+	  ```
+	  bash prepare_tasks_from_obtained.sh
+	  ```
+	  
+	  This will create files named `videoid/tasks_enesidjazh_part`*XXXXXX*, where *XXXXXX* are numbers from 0 to *N* - 1 (depending on the number of videos found).
+	
+	d. Retrieve subtitle metadata: As this takes a relatively long time, we have divided this step into many tasks, that you can run (optionally in paralell). Each task can be expected to run a few hours. For *i* in 0 to *N* - 1, run the tasks prepared in the previous step:
+	
+	  ```
+	  bash retrieve_subtitle_exists.sh *i*
+	  ```
+	
+	e. Sample 120.000 subtitle files fulfilling the inclusion criteria for each language:
+	
+	  ```
+	  sample.sh
+	  ```
+	
+	f. Download the subtitles:
+
+	  ```
+	  bash download_video_parallel.sh
+	  ```
 
 5. Clean, remove duplicates and compute frequencies saving output with LZMA compression in the current directory:
     
@@ -121,7 +154,7 @@ You can re-construct TUBELEX by following the steps below. By modifying the scri
     ```rm *.ftz *.zip; rm -r jtubespeech/video```
 
 
-## Replicating the Experiments
+## How to Replicate the Experiments
 
 To replicate the experiments in our paper you will need the following files placed in the `data` directory. We could not distribute them because their license wasn't clear or didn't allow redistribution:
 
