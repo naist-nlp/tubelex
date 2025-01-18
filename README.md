@@ -91,10 +91,10 @@ You can re-construct TUBELEX by following the steps below. By modifying the scri
 	
 	```python -m unidic download```
 
-3. 3. Scrape manual subtitles. The process consists of several substeps, which we have parallelized using shell scripts and GNU `parallel`. To adjust it to your environment, inspect the shell scripts and change the parameters as necessary. Although we have changed the internal workings of the original JTubeSpeech scripts a little, you may also find [their outline of the process](https://github.com/sarulab-speech/jtubespeech) helpful.
+3. Scrape manual subtitles. The process consists of several substeps, which we have parallelized using shell scripts and GNU `parallel`. To adjust it to your environment, inspect the shell scripts and change the parameters as necessary. Although we have changed the internal workings of the original JTubeSpeech scripts a little, you may also find [their outline of the process](https://github.com/sarulab-speech/jtubespeech) helpful.
 
 
-Do the following substeps in the `jtubespeech-subtitles` subdirectory:
+	Do the following substeps in the `jtubespeech-subtitles` subdirectory:
 
 	a. Make search words based on Wikipedia:
   
@@ -138,17 +138,16 @@ Do the following substeps in the `jtubespeech-subtitles` subdirectory:
 		bash download_video_parallel.sh
 		```
 
-5. Clean, remove duplicates and compute frequencies saving output with LZMA compression in the current directory:
-    
-    ```
-    python tubelex.py -x --clean --unique
-    python tubelex.py -x --frequencies -o tubelex-ja%.tsv.xz
-    python tubelex.py -x --frequencies -D unidic -o tubelex-ja-310%.tsv.xz
-    ```
+5. Clean the subtitles, remove duplicates, compute frequencies, and train models. Note that this involves tokenization/lemmatization and creation of all the variants, so it can be a lengthy process. There are two options:
 
-6. Alternatively, consult the help and process the files as you see fit:
+	a. Adjust and then run the `make.sh` script, which is based on Slurm.	
+	
+		```
+		bash make.sh
+		```
+	b. Build individual corpora and frequency files using `tubelex.py`. See for instance [the script for Japanese](`scripts/make-ja.sh`). You can also consult the help and process the files as you see fit:
 
-    ```python tubelex.py --help```
+       ```python tubelex.py --help```
     
 7. Optionally remove the language identification model, intermediate files, and the downloaded subtitles to save disk space:
 
