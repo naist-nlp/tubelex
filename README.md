@@ -93,7 +93,7 @@ You can re-construct TUBELEX by following the steps below. By modifying the scri
 
 3. Scrape manual subtitles. The process consists of several substeps, which we have parallelized using shell scripts and GNU `parallel`. To adjust it to your environment, inspect the shell scripts and change the parameters as necessary. Although we have changed the internal workings of the [original JTubeSpeech](https://github.com/sarulab-speech/jtubespeech) scripts a little, you may also find their outline of the process helpful.
 
-Do the following substeps in the `jtubespeech-subtitles` subdirectory:
+  Do the following substeps in the `jtubespeech-subtitles` subdirectory:
 
   a. Make search words based on Wikipedia:
   
