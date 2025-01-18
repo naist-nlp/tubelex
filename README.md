@@ -98,56 +98,57 @@ You can re-construct TUBELEX by following the steps below. By modifying the scri
 
 	a. Make search words based on Wikipedia:
   
-		```
-		bash make_search_words.sh
-		```
-		
-		This will create a file `word/tasks.csv` being created with chunks of the search words lists for the next step.
+	```
+	bash make_search_words.sh
+	```
+	
+	This will create a file `word/tasks.csv` being created with chunks of the search words lists for the next step.
 		
 	b. Get video IDs by searching for the collected words:
 	
-		```
-		bash obtain_video_id_parallel.sh
-		```
-		
-		This will automatically run Python scripts in parallel (using GNU `parallel`), one for each of your CPUs.
+	```
+	bash obtain_video_id_parallel.sh
+	```
+	
+	This will automatically run Python scripts in parallel (using GNU `parallel`), one for each of your CPUs.
 	
 	c. Prepare tasks for the next step:
 	
-		```
-		bash prepare_tasks_from_obtained.sh
-		```
-		
-		This will create files named `videoid/tasks_enesidjazh_part`*XXXXXX*, where *XXXXXX* are numbers from 0 to *N* - 1 (depending on the number of videos found).
+	```
+	bash prepare_tasks_from_obtained.sh
+	```
+	
+	This will create files named `videoid/tasks_enesidjazh_part`*XXXXXX*, where *XXXXXX* are numbers from 0 to *N* - 1 (depending on the number of videos found).
 	
 	d. Retrieve subtitle metadata: As this takes a relatively long time, we have divided this step into many tasks, that you can run (optionally in paralell). Each task can be expected to run a few hours. For *i* in 0 to *N* - 1, run the tasks prepared in the previous step:
 	
-		```
-		bash retrieve_subtitle_exists.sh *i*
-		```
+	```
+	bash retrieve_subtitle_exists.sh *i*
+	```
 	
 	e. Sample 120.000 subtitle files fulfilling the inclusion criteria for each language:
 	
-		```
-		sample.sh
-		```
+	```
+	sample.sh
+	```
 	
 	f. Download the subtitles:
 	
-		```
-		bash download_video_parallel.sh
-		```
+	```
+	bash download_video_parallel.sh
+	```
 
 5. Clean the subtitles, remove duplicates, compute frequencies, and train models. Note that this involves tokenization/lemmatization and creation of all the variants, so it can be a lengthy process. There are two options:
 
 	a. Adjust and then run the `make.sh` script, which is based on Slurm.	
 	
-		```
-		bash make.sh
-		```
+	```
+	bash make.sh
+	```
+
 	b. Build individual corpora and frequency files using `tubelex.py`. See for instance [the script for Japanese](`scripts/make-ja.sh`). You can also consult the help and process the files as you see fit:
 
-       ```python tubelex.py --help```
+   ```python tubelex.py --help```
     
 7. Optionally remove the language identification model, intermediate files, and the downloaded subtitles to save disk space:
 
