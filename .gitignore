@@ -52,6 +52,7 @@ tubelex-*-removed-addresses.json
 !/data/es-words.*.txt
 !/data/mrc.csv
 !/data/mrc_README.txt
+!/data/github-images
 /experiments/zz-*
 /experiments/models/*
 /experiments/output/*

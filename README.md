@@ -1,4 +1,6 @@
-# About TUBELEX
+![TUBELEX — Beyond Film Subtitles: Is YouTube the Best Approximation of Spoken Vocabulary?](./data/github-images/tubelex-1024.jpg)
+
+# TUBELEX
 
 TUBELEX is a multi-lingual YouTube subtitle corpus. It currently provides data for Chinese, English, Indonesian, Japanese, and Spanish.
 
