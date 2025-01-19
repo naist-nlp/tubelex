@@ -22,7 +22,7 @@ GROUP2NAME = {
     0: r'speech',
     1: r'film/TV subtitles',
     2: r'other',
-    3: r'our\vphantom{l}',    # alignment with previous group names after rotation
+    3: r'ours\vphantom{l}',    # alignment with previous group names after rotation
     4: r'top ST'
     }
 
@@ -30,7 +30,7 @@ GROUP2NAME_SMALL = {
     0: r'speech',
     1: r'\vphantom{l}\textsmaller{film/TV subtitles}',
     2: r'other',
-    3: r'our\vphantom{l}',    # alignment with previous group names after rotation
+    3: r'ours\vphantom{l}',    # alignment with previous group names after rotation
     4: r'top ST'
     }
 
