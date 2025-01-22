@@ -8,13 +8,13 @@ Word frequency in TUBELEX provides an approximation of everyday languages exposu
 
 You may find TUBELEX useful for NLP applications modeling human familiarity with words, e.g. readability, text simplification, or language learning applications. TUBELEX log-frequencies are highly correlated with psycholinguistic data (lexical decision time, word familiarity) and lexical complexity.
 
-Read [our paper](https://arxiv.org/abs/2410.03240) (to be presented at COLING 2025) for more details:
+Read [our paper](https://aclanthology.org/2025.coling-main.641/) for more details:
 ```
-@article{nohejl_etal_2024_film,
+@inproceedings{nohejl-etal-2025-beyond,
   title={Beyond {{Film Subtitles}}: {{Is YouTube}} the {{Best Approximation}} of {{Spoken Vocabulary}}?},
   author={Nohejl, Adam and Hudi, Frederikus and Kardinata, Eunike Andriani and Ozaki, Shintaro and Riera Machin, Maria Angelica and Sun, Hongyu and Vasselli, Justin and Watanabe, Taro},
-  year={2024}, eprint={2410.03240}, archiveprefix={arXiv}, primaryclass={cs.CL},
-  url={https://arxiv.org/abs/2410.03240v1}, journal={ArXiv preprint}, volume={arXiv:2410.03240v1 [cs]}
+  booktitle = "Proceedings of the 31st International Conference on Computational Linguistics",
+  year = "2025", url = "https://aclanthology.org/2025.coling-main.641/",
 }
 ```
 
@@ -45,7 +45,7 @@ All TUBELEX frequency files are TSV files compressed with LZMA (`xz`) with the f
 
 All files also provide a row of totals as the last row (`[TOTAL]`).
 
-The columns `videos`, `channels` provide dispersion information as count of corpus parts, in which each word occurs in. It can also be easily determined for categories using the columns `count:`*C*. This measure of dispersion is called range, contextual diversity, or document frequency. You might want to try the logarithm of `channels` as a feature for your model instead of log-frequency.
+The columns `videos`, `channels` provide dispersion information as count of corpus parts, in which each word occurs in. It can also be easily determined for categories using the columns `count:`*C*. This measure of dispersion is called range, contextual diversity, or document frequency. You might want to try the logarithm of `channels` as a feature for your model instead of log-frequency. (Learn more in our [preprint about dispersion](https://arxiv.org/abs/2501.06536).)
 
 We provide the following [word frequency lists](frequencies) described in our paper for each language identified with a 2-letter ISO code *L*:
 
