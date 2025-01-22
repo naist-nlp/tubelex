@@ -14,7 +14,7 @@ Read [our paper](https://aclanthology.org/2025.coling-main.641/) for more detail
   title={Beyond {{Film Subtitles}}: {{Is YouTube}} the {{Best Approximation}} of {{Spoken Vocabulary}}?},
   author={Nohejl, Adam and Hudi, Frederikus and Kardinata, Eunike Andriani and Ozaki, Shintaro and Riera Machin, Maria Angelica and Sun, Hongyu and Vasselli, Justin and Watanabe, Taro},
   booktitle = "Proceedings of the 31st International Conference on Computational Linguistics",
-  year = "2025", url = "https://aclanthology.org/2025.coling-main.641/",
+  year = "2025", url = "https://aclanthology.org/2025.coling-main.641/"
 }
 ```
 
