@@ -61,3 +61,6 @@ for lang in zh en id ja es; do printf "${lang}\t"; head -n1 fasttext/tubelex-${l
 for lang in zh en id ja es; do /opt/kenlm/build/bin/lmplz -o 5 -S 80% < corpus/tokenized-${lang}.txt > kenlm/tubelex-${lang}.arpa; done &> kenlm/kenlm.out
 
 sed -nE 's=^(Reading|[1-5]) (corpus/tokenized-)?([0-9a-z]+)(\.txt)?.*=\3=p' kenlm/kenlm.out | tr '\n' ' ' | sed -E 's/([0-9]) ([a-z]|$)/\1\n\2/g' > kenlm/sizes.tsv
+
+# Dump video lists:
+for lang in zh en id ja es; do python tubelex.py --lang $lang -xl; done

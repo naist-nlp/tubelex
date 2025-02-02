@@ -23,7 +23,7 @@ This repository provides full source code for the project and word frequency lis
 - [fastText word embeddings](https://huggingface.co/naist-nlp/tubelex-fasttext)
 - [KenLM n-gram models](https://huggingface.co/naist-nlp/tubelex-kenlm)
 
-Note that the full text of the corpus cannot be published for copyright reasons. To enable use of TUBELEX in a wide range of applications, we offer frequency lists in multiple variants and the two above-mentioned types of basic language models. The frequency lists also include frequencies by video category, and dispersion (range or “contextual diversity”).
+Note that the full text of the corpus cannot be published for copyright reasons. To enable use of TUBELEX in a wide range of applications, we offer frequency lists in multiple variants and the two above-mentioned types of basic language models. The frequency lists also include frequencies by video category, and dispersion (range or “contextual diversity”). Additionally, we provide both source code and video ID lists that you can use to [reconstruct/rehydrate](#how-to-reconstruct-the-corpus) TUBELEX.
 
 ## Word Frequency Lists
 
@@ -77,8 +77,13 @@ We are currently working on:
 - acquiring more metadata and information that we could make public,
 - investigating dispersion measures based on TUBELEX ([preprint](https://arxiv.org/abs/2501.06536)).
 
+And there's definitely more what could be done. Please, contact [Adam Nohejl](https://linktr.ee/adamnohejl), if you're interested in collaborating!
 
-## How to (Re)Constructing the Corpus
+
+## How to (Re)Construct the Corpus
+
+**Update 2025-02-02:** In addition to reconstructing the corpus from scratch, or constructing TUBELEX for other languages, you can also rehydrate the corpus using [the full video lists we provide](corpus/). These files 
+(`corpus/videos-*.csv`) are in the same format as the sample files (`jtubespeech-subtitles/sub/*/*_sample.csv`) constructed in step 3e below and contain basic video metadata such as categories or upload dates, which you can use for filtering.
 
 You can re-construct TUBELEX by following the steps below. By modifying the scripts, it is possible to construct corpora for other languages or with different parameters (larger size, different tokenizations etc.)
 

@@ -30,8 +30,10 @@ TODO/
 /tubelex-frequency-2024-07-23-es
 tubelex-*-removed-addresses.json
 
-# Subtitle files in eval samples
+# The corpus is not public due to copyright...
 /corpus/*
+# ...except ideo ids and metadata:
+!/corpus/videos-*.csv
 
 # SubIMDB data, LaboroTVSpeech, HKUST-MTCS data
 /SubIMDB_All_Individual.tar.xz

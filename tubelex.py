@@ -63,6 +63,7 @@ DATA_PATH_FMT = 'jtubespeech-subtitles/video/%s/vtt'
 SUBLIST_PATH_FMT = 'jtubespeech-subtitles/sub/%s/%s_sample.csv'
 DEFAULT_FREQ_PATH_FMT = 'frequencies/tubelex-%s%%.tsv'
 DEFAULT_TOK_PATH_FMT = 'corpus/tokenized-%s.txt'
+DEFAULT_VLIST_PATH_FMT = 'corpus/videos-%s.csv'
 DEFAULT_CHANNEL_STATS_PATH_FMT = 'frequencies/tubelex-%s-channels.tsv'
 DEFAULT_REM_ADDR_PATH_FMT = 'frequencies/tubelex-%s-removed-addresses.json'
 DEFAULT_MIN_VIDEOS = 0
@@ -333,6 +334,10 @@ def parse() -> argparse.Namespace:
         help='Compute frequencies'
         )
     final_step.add_argument(
+        '--video-list', '-l', action='store_true',
+        help='Dump video IDs and metadata actually used for the corpus.'
+        )
+    final_step.add_argument(
         '--tokenize', '-t', action='store_true',
         help=(
             'Tokenize (create data suitable for training embeddings instead of '
@@ -361,9 +366,9 @@ def parse() -> argparse.Namespace:
     parser.add_argument(
         '--output', '-o', type=str, default=None,
         help=(
-            'Output filename for frequencies. If the placeholder "%%" is present, it '
-            'is replaced with a string identifying the normalization. Otherwise, '
-            'output only unnormalized data.'
+            'Output filename for --frequencies, --video-list, and --tokenize. '
+            'If the placeholder "%%" is present, it is replaced with a string '
+            'identifying the normalization. Otherwise, output only unnormalized data.'
             )
         )
     parser.add_argument(
@@ -1150,6 +1155,34 @@ def do_tokenize(
         json.dump(removed_addresses, fra)
 
 
+def do_video_list(
+    lang: str,
+    identifier: str,
+    storage: Storage,
+    sublist: pd.DataFrame,
+    start_index: Optional[int],
+    stop_index: Optional[int],
+    path: Optional[str],
+    ) -> None:
+
+    vlist_path: str  = path or (DEFAULT_VLIST_PATH_FMT % identifier)
+    assert '%' not in vlist_path
+    assert vlist_path.endswith('.csv') or vlist_path.endswith('.csv.xz')
+
+    with get_files_contents(UNIQUE_PATH_FMT % identifier, storage) as files_contents:
+        files, _iter_contents = files_contents
+        corpus_videoids = {
+            file.removesuffix(DATA_SUFFIX) for file in files[start_index:stop_index]
+            }
+        corpus_list = sublist[
+            sublist.index.to_series().apply(corpus_videoids.__contains__)
+            ]
+
+        assert len(corpus_list) == len(corpus_videoids)
+
+    corpus_list.to_csv(vlist_path)
+
+
 def get_stanza_tokenizers(
     lang: str, full: bool, args: argparse.Namespace
     ) -> tuple[Tokenizer, Optional[Tokenizer], Optional[TokenizerTagger]]:
@@ -1405,6 +1438,7 @@ def main() -> None:
     clean = args.clean
     unique = args.unique
     frequencies = args.frequencies
+    video_list = args.video_list
     with_pos = args.pos
     categories = args.categories
     tokenized_files = args.tokenized_files
@@ -1417,7 +1451,7 @@ def main() -> None:
         '--tokenized-files requires --frequencies, --output, no --list option.'
         )
 
-    if not (clean or unique or frequencies or args.tokenize):
+    if not (clean or unique or frequencies or args.tokenize or video_list):
         clean = True
         unique = True
         frequencies = True
@@ -1450,7 +1484,7 @@ def main() -> None:
             )
     # sublist: for file filtering (clean), and channel ids (frequencies)
 
-    if (clean or frequencies) and not tokenized_files:
+    if (clean or frequencies or video_list) and not tokenized_files:
         list_path = args.list or (SUBLIST_PATH_FMT % (lang, lang))
         all_subtitles = pd.read_csv(
             list_path,
@@ -1557,6 +1591,19 @@ def main() -> None:
                 removed_addresses_path=args.removed_addresses
                 )
 
+    if args.video_list:
+        assert not (frequencies or args.tokenize)
+        assert not tokenized_files
+        assert sublist is not None
+        do_video_list(
+            lang,
+            identifier,
+            storage,
+            sublist,
+            start_index=start_index,
+            stop_index=stop_index,
+            path=args.output
+            )
 
 if __name__ == '__main__':
     main()
