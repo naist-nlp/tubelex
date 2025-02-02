@@ -291,7 +291,8 @@ def main():
         r_not_na = ~r.isna()
         s = background_gradient(
             s,
-            cmap='Blues', bool_subset=r_not_na,
+            cmap='Blues',   # use 'inferno' for black background (COLING 2025 slides)
+            bool_subset=r_not_na,
             gmap=(-r if (best == 'min') else r),
             )
         if results_metric is None:

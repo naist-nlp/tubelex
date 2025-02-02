@@ -15,7 +15,7 @@ from functools import partial
 from typing import NamedTuple, Any
 from tqdm import tqdm
 import scipy
-from sklearn.linear_model import RidgeCV
+from sklearn.linear_model import RidgeCV, LinearRegression
 from sklearn.metrics import (
     mean_squared_error as mse_score, mean_absolute_error as mae_score, r2_score
     )
@@ -73,7 +73,6 @@ CAT_ID2CATEGORY = {
 
 def pearson_r(x: np.ndarray, y: np.ndarray):
     return np.corrcoef(x, y)[0][1]
-
 
 DATASET_NAME = 'MLSP2024/MLSP2024'
 LANG2DATASET_ID = {
@@ -469,7 +468,6 @@ def parse_args() -> argparse.Namespace:
                         help='Train linear regression.')
     action.add_argument('--correlation', action='store_true',
                         help='Compute correlation.')
-
     parser.add_argument('--stats-size-coverage',
                         default='experiments/stats-size-coverage.csv',
                         help='Output CSV file for size-coverage stats.')
@@ -552,6 +550,7 @@ def parse_args() -> argparse.Namespace:
         'it is understood as a directory name for multiple files. '
         'Default: experiments/output (experiments/output.tsv).'
         ))
+    parser.add_argument('--extended-output', '-x', action='store_true')
     parser.add_argument(
         '--subtlex', nargs='*',
         default=[], help=(
@@ -1249,6 +1248,13 @@ def main(args: argparse.Namespace) -> None:
             if parent:  # may be ''
                 os.makedirs(parent, exist_ok=True)
             fo = open(path_out, 'w')
+            if correlation and args.extended_output:
+                n_fields = min(len(data[0]), 4)
+                cols = [f'data_{i}' for i in range(n_fields)]
+                cols += [
+                    'target', 'missing', 'logf', 'prediction', 'error', 'abs_error'
+                    ]
+                print('\t'.join(cols), file=fo)
         else:
             fo = None
 
@@ -1327,10 +1333,25 @@ def main(args: argparse.Namespace) -> None:
                     f'{input_id}\t{LANG2FULL_NAME[lang]}\t{r}\t{r_cached}\t'
                     f'{n}\t{n_missing}\t{r_valid}'
                     )
-                for fields, p in zip(data, logf):
-                    print('\t'.join((
-                        *fields[:4], str(p)
-                        )), file=fo)
+                if args.extended_output:
+                    xs      = logf.reshape(-1, 1)
+                    lr      = LinearRegression().fit(xs, c)
+                    pred    = lr.predict(xs)
+                    err     = pred - c
+                    abs_err = np.abs(err)
+
+                    for fields, vm, vx, vy, vp, ve, va in zip(
+                        data, missing, logf, c, pred, err, abs_err
+                        ):
+                        print('\t'.join((
+                            *fields[:4],
+                            str(vy), str(vm), str(vx), str(vp), str(ve), str(va)
+                            )), file=fo)
+                else:
+                    for fields, p in zip(data, logf):
+                        print('\t'.join((
+                            *fields[:4], str(p)
+                            )), file=fo)
             elif train:
                 assert c is not None
                 linear_regression = RidgeCV().fit(
