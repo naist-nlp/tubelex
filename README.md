@@ -4,7 +4,7 @@
 
 TUBELEX is a multi-lingual YouTube subtitle corpus. It currently provides data for Chinese, English, Indonesian, Japanese, and Spanish.
 
-Word frequency in TUBELEX provides an approximation of everyday languages exposure comparable to, and often better than other resources, such as written corpora, Wikipedia, or film subtitle corpora (SUBTLEX, OpenSubtitles).
+Word frequency in TUBELEX provides an approximation of everyday language exposure comparable to, and often better than other resources, such as written corpora, Wikipedia, or film subtitle corpora (SUBTLEX, OpenSubtitles).
 
 You may find TUBELEX useful for NLP applications modeling human familiarity with words, e.g. readability, text simplification, or language learning applications. TUBELEX log-frequencies are highly correlated with psycholinguistic data (lexical decision time, word familiarity) and lexical complexity.
 
