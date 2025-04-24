@@ -29,11 +29,11 @@ Note that the full text of the corpus cannot be published for copyright reasons.
 
 Frequency lists in the default tokenization and normalization for the impatient:
 
-- [Chinese](frequency/tubelex-zh.tsv.xz)
-- [English](frequency/tubelex-en.tsv.xz)
-- [Indonesian](frequency/tubelex-id.tsv.xz)
-- [Japanese](frequency/tubelex-ja.tsv.xz)
-- [Spanish](frequency/tubelex-es.tsv.xz)
+- [Chinese](frequencies/tubelex-zh.tsv.xz)
+- [English](frequencies/tubelex-en.tsv.xz)
+- [Indonesian](frequencies/tubelex-id.tsv.xz)
+- [Japanese](frequencies/tubelex-ja.tsv.xz)
+- [Spanish](frequencies/tubelex-es.tsv.xz)
 
 All TUBELEX frequency files are TSV files compressed with LZMA (`xz`) with the following columns:
 
