@@ -1,0 +1,2 @@
+file	language	correlation	adjusted_r2	corr_bnc	n	n_missing	corr_without_missing
+en	English	-0.5570121408338445	0.3301484221077202	0.9483895001123944	38130	0	-0.5570121408338445

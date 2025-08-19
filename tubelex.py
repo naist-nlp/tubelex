@@ -11,6 +11,7 @@ from zipfile import ZipFile
 from itertools import chain, groupby, compress, islice
 import argparse
 import json
+import random
 from os.path import splitext
 from tqdm import tqdm  # type: ignore
 import numpy as np
@@ -57,6 +58,7 @@ SUB_SUFFIX = '.vtt'     # input
 DATA_SUFFIX = '.txt'    # intermediate data
 CLEAN_PATH_FMT = 'corpus/clean-%s'
 UNIQUE_PATH_FMT = 'corpus/unique-%s'
+WIKI_PATH_FMT = 'corpus-wiki/wiki-%s'
 
 # Defaults for CLI arguments:
 DATA_PATH_FMT = 'jtubespeech-subtitles/video/%s/vtt'
@@ -193,7 +195,8 @@ def linear_kernel_piecewise(x, max_size=LINEAR_KERNEL_CHUNK_SIZE, wrapper=None):
 def add_tokenizer_arg_group(
     parser: argparse.ArgumentParser,
     unique_tokenization: bool = False,
-    title='Tokenization options'
+    title='Tokenization options',
+    default_no_filter_tokens: bool = False
     ):
     group = parser.add_argument_group(title=title)
     group.add_argument(
@@ -245,11 +248,19 @@ def add_tokenizer_arg_group(
             'before English tokenization.'
             )
         )
-    group.add_argument(
-        '--no-filter-tokens', action='store_false', dest='filter_tokens', help=(
-            'Do not filter tokens, do not replace numbers. (Does not apply to regex.)'
+    if default_no_filter_tokens:
+        group.add_argument(
+            '--filter-tokens', action='store_true', help=(
+                'Filter tokens, replace numbers. (Does not apply to regex.)'
+                )
             )
-        )
+    else:
+        group.add_argument(
+            '--no-filter-tokens', action='store_false', dest='filter_tokens', help=(
+                'Do not filter tokens, do not replace numbers. '
+                '(Does not apply to regex.)'
+                )
+            )
     add_tagger_arg_group(group)
 
 
@@ -299,6 +310,19 @@ def parse() -> argparse.Namespace:
             )
         )
     parser.add_argument(
+        '--bnc', action='store_true',
+        help=(
+            'Tokenized files BNC.'
+            )
+        )
+    parser.add_argument(
+        '--wikipedia', action='store_true',
+        help=(
+            'Files are Wikipedia dumps filtered using make_corpus_wiki.py '
+            '(in "corpus-wiki").'
+            )
+        )
+    parser.add_argument(
         '--no-filter-cc-descriptions', action='store_false',
         dest='filter_cc_descriptions', help=(
             'Do not filter CC descriptions in brackets (e.g. "[Music]", "[Applause]").'
@@ -324,6 +348,10 @@ def parse() -> argparse.Namespace:
         '--stop-index', type=int, default=None,
         help='Index of the first file not to process.'
         )
+    parser.add_argument(
+        '--random-sample', '-R', type=int, default=None,
+        help='Random sample size.'
+        )
 
     parser.add_argument('--clean', '-c', action='store_true', help='Clean up data')
     parser.add_argument('--unique', '-u', action='store_true', help='Deduplicate data')
@@ -346,6 +374,10 @@ def parse() -> argparse.Namespace:
     parser.add_argument(
         '--all-counts', '-a', action='store_true',
         help='Count per-video and per-channel occurrences'
+        )
+    parser.add_argument(
+        '--article-counts', '--text-counts', action='store_true',
+        help='Count per-article/per-text ("video") occurrences'
         )
     parser.add_argument(
         '--normalize', '-n', type=str, default=None,
@@ -591,6 +623,13 @@ def filter_dir_files(
 DEFAULT_ENCODING = 'utf-8'
 
 
+def _iter_list_idx(xs: list, start_index, stop_index, indices):
+    return (
+        (xs[i] for i in indices) if (indices is not None) else
+        xs[start_index:stop_index]
+        )
+
+
 @contextmanager
 def get_files_contents(
     path: str, storage: Storage, any_suffix: bool = False,
@@ -606,15 +645,15 @@ def get_files_contents(
                 zf.namelist()
                 )
 
-            def iter_contents(start_index=None, stop_index=None):
-                for file in files[start_index:stop_index]:
+            def iter_contents(start_index=None, stop_index=None, indices=None):
+                for file in _iter_list_idx(files, start_index, stop_index, indices):
                     yield zf.read(file).decode(encoding)
 
         elif filenames:
             files = filenames
 
-            def iter_contents(start_index=None, stop_index=None):
-                for file in files[start_index:stop_index]:
+            def iter_contents(start_index=None, stop_index=None, indices=None):
+                for file in _iter_list_idx(files, start_index, stop_index, indices):
                     with open(os.path.join(path, file), encoding=encoding) as f:
                         yield f.read()
         else:
@@ -624,8 +663,10 @@ def get_files_contents(
                 ))
             files = [f for _d, f in dfs]
 
-            def iter_contents(start_index=None, stop_index=None):
-                for directory, file in dfs[start_index:stop_index]:
+            def iter_contents(start_index=None, stop_index=None, indices=None):
+                for directory, file in _iter_list_idx(
+                    dfs, start_index, stop_index, indices
+                    ):
                     with open(os.path.join(directory, file), encoding=encoding) as f:
                         try:
                             yield f.read()
@@ -911,11 +952,13 @@ def do_frequencies(
     tokenize: Optional[Tokenizer],
     categories: bool,
     all_counts: bool,
+    article_counts: bool,
     normalize: Optional[str],
     pos_tag: Optional[TokenizerTagger],
     filter_cc_descriptions: bool,
     start_index: Optional[int],
     stop_index: Optional[int],
+    random_sample: Optional[int],
     path: Optional[str],
     channel_stats_path: Optional[str],
     removed_addresses_path: Optional[str],
@@ -923,37 +966,47 @@ def do_frequencies(
     min_channels: int,
     verbose: bool,
     laborotv: bool = False,
-    hkust: bool = False
+    hkust: bool = False,
+    wiki: bool = False,
+    bnc: bool = False
     ) -> None:
 
     assert (tokenize is not None) != (pos_tag is not None), (tokenize, pos_tag)
+    assert (start_index is None) and (stop_index is None) or not random_sample
 
     cat_ids = None
     if sublist is not None:
-        channel_ids = sublist[
-            # backward compatibility with the original JTubeSpeech
-            'channelid' if 'channelid' in sublist else
-            'channel_id'
-            ]
+        if bnc:
+            channel_ids = None
+            n_channels_and_no_channels = None
+            if categories:
+                cat_ids = sublist['categories']
+        else:
+            channel_ids = sublist[
+                # backward compatibility with the original JTubeSpeech
+                'channelid' if 'channelid' in sublist else
+                'channel_id'
+                ]
 
-        ch2n = Counter(channel_ids)
-        n_no_channel = ch2n.pop('', 0)
-        n2chn = Counter(ch2n.values())
-        n_channels_and_no_channels = len(ch2n) + n_no_channel
+            ch2n = Counter(channel_ids)
+            n_no_channel = ch2n.pop('', 0)
+            n2chn = Counter(ch2n.values())
+            n_channels_and_no_channels = len(ch2n) + n_no_channel
 
-        with open(
-            channel_stats_path or (DEFAULT_CHANNEL_STATS_PATH_FMT % lang), 'wt'
-            ) as f:
-            f.write('videos_in_channel\tchannels\n')
-            for n, chn in sorted(n2chn.items()):
-                f.write(f'{n}\t{chn}\n')
-            f.write(f'NO_CHANNEL_ID\t{n_no_channel}\n')
+            with open(
+                channel_stats_path or (DEFAULT_CHANNEL_STATS_PATH_FMT % lang), 'wt'
+                ) as f:
+                f.write('videos_in_channel\tchannels\n')
+                for n, chn in sorted(n2chn.items()):
+                    f.write(f'{n}\t{chn}\n')
+                f.write(f'NO_CHANNEL_ID\t{n_no_channel}\n')
 
-        if categories:
-            cat2id  = {cat: cat_id for cat_id, cat in CAT_ID2CATEGORY.items()}
-            cat_ids = sublist['categories'].apply(cat2id.__getitem__)
+            if categories:
+                cat2id  = {cat: cat_id for cat_id, cat in CAT_ID2CATEGORY.items()}
+                cat_ids = sublist['categories'].apply(cat2id.__getitem__)
 
         if all_counts:
+            assert not bnc
             assert not n_no_channel
             channel_ids = pd.Series(
                 pd.Categorical(channel_ids).codes,  # ints instead of str IDs
@@ -961,8 +1014,9 @@ def do_frequencies(
                 )
     else:
         # Only warn and fall back to not outputting categories:
-        sys.stderr.write('Cannot count frequencies by category, missing sublist.\n')
-        categories = False
+        if categories:
+            sys.stderr.write('Cannot count frequencies by category, missing sublist.\n')
+            categories = False
 
         channel_ids = None
         n_channels_and_no_channels = None
@@ -979,14 +1033,24 @@ def do_frequencies(
         normalize = should_normalize
 
     with get_files_contents(
-        tokenized_files or (UNIQUE_PATH_FMT % identifier),
+        tokenized_files or (
+            (WIKI_PATH_FMT % identifier) if wiki else
+            (UNIQUE_PATH_FMT % identifier)
+            ),
         storage,
         any_suffix=(tokenized_files is not None and not hkust),
         filenames=(LABOROTV_FILES if laborotv else None),
         encoding=(hkust_mtsc.ENCODING if hkust else DEFAULT_ENCODING)
         ) as files_contents:
         files, iter_contents = files_contents
-        n_videos = len(files[start_index:stop_index])
+        if random_sample is not None:
+            random.seed(42)  # Replicable:-)
+            sample_indices = random.sample(range(len(files)), random_sample)
+            selected_files = [files[i] for i in sample_indices]
+        else:
+            sample_indices = None
+            selected_files = files[start_index:stop_index]
+        n_videos = len(selected_files)
         assert n_videos, 'Something went wrong, no subtitles found.'
 
         if all_counts:
@@ -1003,16 +1067,17 @@ def do_frequencies(
             channels=(channel_ids is not None),
             pos=(pos_tag is not None),
             categories=categories,
-            count_in_docs=(n_videos if all_counts else None),
-            count_in_channels=(n_channels_and_no_channels if all_counts else None)
+            count_in_docs=all_counts or article_counts,
+            count_in_channels=all_counts
             )
         replaced_counter = Counter()
         removed_addresses = defaultdict(list)
 
         for video_no, (file, text) in tqdm(
             desc='Computing frequencies',
-            iterable=enumerate(zip(files[start_index:stop_index],
-                                   iter_contents(start_index, stop_index))),
+            iterable=enumerate(zip(selected_files,
+                                   iter_contents(start_index, stop_index,
+                                                 sample_indices))),
             total=n_videos
             ):
             replacer = Replacer(replaced_counter, removed_addresses)
@@ -1048,11 +1113,20 @@ def do_frequencies(
                 continue  # Bypass the usual tokenization process
             elif hkust:
                 text = hkust_mtsc.process(text)
+            elif bnc:
+                words = [w for w in text.split(' ') if match_relaxed_word(w)]
+                counters.add(words, channel_id, cat_id)
+                counters.close_doc()
+                continue  # Bypass the usual tokenization process
+
 
             if tokenize is not None:
                 tokenized_or_tagged = list(tokenize(text))   # TODO already list?
-                words = replacer.replace_in_tokens(tokenized_or_tagged,
-                                                   retry_if_broken=True)
+                if not wiki:
+                    words = tokenized_or_tagged
+                else:
+                    words = replacer.replace_in_tokens(tokenized_or_tagged,
+                                                       retry_if_broken=True)
                 counters.add(words, channel_id, cat_id)
                 if verbose:
                     print(f'{file}:')
@@ -1060,6 +1134,7 @@ def do_frequencies(
                         print(w)
                     print()
             else:
+                assert not wiki
                 tokenized_or_tagged = list(pos_tag(text))   # TODO already list?
                 words_pos = replacer.replace_in_tagged(tokenized_or_tagged,
                                                        retry_if_broken=True)
@@ -1070,7 +1145,7 @@ def do_frequencies(
                         print(f'{w}\t{p}')
                     print()
 
-            if not replacer.all_placeholders_replaced():
+            if not wiki and not replacer.all_placeholders_replaced():
                 print(
                     f'{video_id}: s {replacer.out_idx} out of '
                     f'{len(replacer.out_tokens)} placeholders.\n'
@@ -1402,7 +1477,7 @@ def get_tokenizers(
         return (surface_tokenize, tokenize, pos_tag)
 
     if tokenization == 'regex':
-        is_word     = None  # The words already "pass" match_word_num
+        is_word     = None
         assert not (full and args.pos)
 
         def tok_repl(ts: Iterable[str]) -> Iterable[str]:
@@ -1439,12 +1514,14 @@ def main() -> None:
     storage = Storage.from_args(args)
     start_index = args.start_index
     stop_index = args.stop_index
+    random_sample = args.random_sample
     clean = args.clean
     unique = args.unique
     frequencies = args.frequencies
     with_pos = args.pos
     categories = args.categories
     all_counts = args.all_counts
+    article_counts = args.article_counts
     tokenized_files = args.tokenized_files
     limit_categories = args.limit_categories
 
@@ -1478,43 +1555,54 @@ def main() -> None:
             raise Exception(
                 '--limit--categories cannot be applied with --tokenized-files.'
                 )
-    if (args.laborotvspeech or args.hkust_mtsc) and not tokenized_files:
+    if (args.laborotvspeech or args.hkust_mtsc or args.bnc) and not tokenized_files:
         raise Exception(
-            '--laborotvspeech/--hkust-mtsc cannot be applied without --tokenized-files.'
+            '--laborotvspeech/--hkust-mtsc/--bnc cannot be applied without '
+            '--tokenized-files.'
             )
-    if args.laborotvspeech and args.hkust_mtsc:
+    if sum((args.laborotvspeech, args.hkust_mtsc, args.bnc)) > 1:
         raise Exception(
-            '--laborotvspeech and --hkust-mtsc cannot be used together.'
+            '--laborotvspeech/--hkust-mtsc/--bnc cannot be used together.'
             )
     # sublist: for file filtering (clean), and channel ids (frequencies)
 
-    if (clean or frequencies) and not tokenized_files:
-        list_path = args.list or (SUBLIST_PATH_FMT % (lang, lang))
-        all_subtitles = pd.read_csv(
-            list_path,
-            index_col='videoid',
-            na_filter=False  # keep empty channelids as empty strings
-            )
+    sublist = None
+    if (clean or frequencies):
+        if not tokenized_files:
+            list_path = args.list or (SUBLIST_PATH_FMT % (lang, lang))
+            all_subtitles = pd.read_csv(
+                list_path,
+                index_col='videoid',
+                na_filter=False  # keep empty channelids as empty strings
+                )
 
-        # Filtering for original JTubeSpeech:
-        # Keep manual only:
-        manual_subtitles = all_subtitles[all_subtitles['sub']]
-        # Remove duplicates
-        # (pairs where ['auto']==True, ['auto']==False -- we don't care):
-        sublist = manual_subtitles[~manual_subtitles.index.duplicated()]
-        if limit_categories and clean:
-            if 'categories' not in sublist.columns:
-                raise Exception(
-                    f'Subtitle list (--list) at "{list_path}" does not have a '
-                    f'"categories" column required to apply --limit-categories.'
-                    )
-            cat_set = set(map(CAT_ID2CATEGORY.get, limit_categories))
-            cat_cond = sublist['categories'].apply(lambda c: c in cat_set)
-            sublist = sublist.loc[cat_cond]
-    else:
-        sublist = None
+            # Filtering for original JTubeSpeech:
+            # Keep manual only:
+            manual_subtitles = all_subtitles[all_subtitles['sub']]
+            # Remove duplicates
+            # (pairs where ['auto']==True, ['auto']==False -- we don't care):
+            sublist = manual_subtitles[~manual_subtitles.index.duplicated()]
+            if limit_categories and clean:
+                if 'categories' not in sublist.columns:
+                    raise Exception(
+                        f'Subtitle list (--list) at "{list_path}" does not have a '
+                        f'"categories" column required to apply --limit-categories.'
+                        )
+                cat_set = set(map(CAT_ID2CATEGORY.get, limit_categories))
+                cat_cond = sublist['categories'].apply(lambda c: c in cat_set)
+                sublist = sublist.loc[cat_cond]
+        elif args.bnc:
+            assert frequencies and not clean
+            if args.list:
+                list_path = args.list
+            else:
+                # tokenized_files is either a directory or an archive name without
+                # extension
+                list_path = tokenized_files + '.csv'
+            sublist = pd.read_csv(list_path, index_col='videoid')
 
     if clean:
+        assert not random_sample  # TODO not implemented
         data_path = args.data or (DATA_PATH_FMT % lang)
         do_clean(
             lang,
@@ -1546,6 +1634,7 @@ def main() -> None:
                 )
 
         if unique:
+            assert not random_sample  # TODO not implemented
             do_unique(
                 lang,
                 identifier,
@@ -1566,14 +1655,18 @@ def main() -> None:
                 tokenized_files=tokenized_files,
                 laborotv=args.laborotvspeech,
                 hkust=args.hkust_mtsc,
+                wiki=args.wikipedia,
+                bnc=args.bnc,
                 tokenize=tokenize,
                 categories=categories,
                 all_counts=all_counts,
+                article_counts=article_counts,
                 normalize=args.normalize,
                 pos_tag=pos_tag,
                 filter_cc_descriptions=args.filter_cc_descriptions,  # TODO TODO ignored
                 start_index=start_index,
                 stop_index=stop_index,
+                random_sample=random_sample,
                 path=args.output,
                 channel_stats_path=args.channel_stats,
                 removed_addresses_path=args.removed_addresses,
@@ -1582,6 +1675,7 @@ def main() -> None:
                 verbose=args.verbose
                 )
         elif args.tokenize:
+            assert not random_sample  # TODO not implemented
             assert (tokenize is not None)
             assert (pos_tag is None)
             assert not with_pos

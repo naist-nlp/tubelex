@@ -25,7 +25,8 @@ NORMALIZED_SUFFIX_FNS = (
     (True, '-nfkc-lower', lambda w: unicode_normalize('NFKC', w).lower())
     )
 
-MAX_N_TYPES = 650_000   # TODO: Increase if you we have more types (unique words)
+MAX_N_TYPES = 30_000_000 # for wiki, 650_000 was enough for tubelex
+# TODO Increase if you we have more types (unique words)
 
 
 def normalize2normalized_suffix_fns(
@@ -179,8 +180,8 @@ class WordCounter:
     def __init__(self,
                  channels: bool = False, pos: bool = False, categories: bool = False,
                  # TODO: the exact numbers are currently ignored:
-                 count_in_docs: int | None = None,
-                 count_in_channels: int | None = None
+                 count_in_docs: bool = False,
+                 count_in_channels: bool = False
                  ):
         super().__init__()
         self.word_count     = Counter()
@@ -189,10 +190,10 @@ class WordCounter:
         self.word_channels  = defaultdict(set) if channels else None
         self.word_pos       = defaultdict(Counter) if pos else None
         self.doc_words      = set()
-        self.doc2sparse_words = {} if (count_in_docs is not None) else None
-        self.channel2sparse_words = {} if (count_in_channels is not None) else None
+        self.doc2sparse_words = {} if count_in_docs else None
+        self.channel2sparse_words = {} if count_in_channels else None
         self.word_index = (
-            {} if ((count_in_docs is not None) or (count_in_channels is not None))
+            {} if (count_in_docs or count_in_channels)
             else None
             )
         self.doc_n = 0
@@ -523,16 +524,16 @@ class WordCounterGroup(dict[str, WordCounter]):
     __slots__ = ('n_words', 'n_docs', 'count_in_docs', 'count_in_channels')
     n_words: int
     n_docs: int
-    count_in_docs: int | None
-    count_in_channels: int | None
+    count_in_docs: bool
+    count_in_channels: bool
 
     def __init__(
         self,
         normalize: bool | str,  # may be 'lower', 'nfkc' or 'nfkc-lower'
         channels: bool = False, pos: bool = False,
         categories: bool = False,
-        count_in_docs: int | None = None,
-        count_in_channels: int | None = None
+        count_in_docs: bool = False,
+        count_in_channels: bool = False
         ):
         super().__init__((
             (suffix, WordCounter(

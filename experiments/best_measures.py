@@ -1,8 +1,6 @@
 import argparse
-from collections import defaultdict
 import pandas as pd
 import numpy as np
-import os
 import seaborn as sns
 import matplotlib.pyplot as plt
 
@@ -45,24 +43,8 @@ MEASURES_TASKS = ['ldt', 'fam', 'mlsp']
 #     }
 #
 
-TASK2R_FILES = {
-    task: f'experiments/measures-{task}-corr-aggregate-correlation.tsv'
-    for task in MEASURES_TASKS
-    }
-TASK2P_FILES = {
-    task: f'experiments/measures-{task}-corr-aggregate-pvalues.tsv'
-    for task in MEASURES_TASKS
-    }
-TASK2R2_FILES = {
-    task: f'experiments/measures-{task}-corr-aggregate-adjusted_r2.tsv'
-    for task in MEASURES_TASKS
-    }
-TASK2N_FILES = {
-    task: f'experiments/measures-{task}-corr-aggregate-n.tsv'
-    for task in MEASURES_TASKS
-    }
-
 LOGF = 'log_frequency'
+
 
 def r_n2adjusted_r2(
     r: pd.DataFrame,
@@ -75,14 +57,27 @@ def r_n2adjusted_r2(
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
+    corp = parser.add_mutually_exclusive_group()
+    corp.add_argument('--wiki', action='store_true',
+                      help='Use wiki-based dispersion measures.')
+    corp.add_argument('--bnc', action='store_true',
+                      help='Use BNC-based dispersion measures.')
+    parser.add_argument('--english-only', '-e', action='store_true',
+                        help='English-only on TUBELEX.')
     parser.add_argument('--all', '-a', action='store_true',
                         help='List all instead of best.')
     parser.add_argument('--no-select-log', '-l', action='store_true',
                         help='Do not select log/non-log variants.')
+    parser.add_argument('--japanese-labels', '-j', action='store_true')
+    parser.add_argument('--small', '-s', action='store_true')
+    parser.add_argument('--no-extended', '-X', action='store_true')
+    parser.add_argument('--output', '-o')
     return parser.parse_args()
+
 
 def my_round(x):
     return x.round(3)
+
 
 def metric2transform_base_parts(m: str):
     transform = ''
@@ -101,25 +96,56 @@ def metric2transform_base_parts(m: str):
         parts = 'categories'
     return (transform, m, parts)
 
+
 MEASURE2NAME = {
     'range':        'Range',
-    'sort_gini':    'Gini Index',
     'juilland_d':   'Juilland\'s $D$',
-    'gries_dp':     'Gries\'s DP',
-    'rosengren_s':  r"Rosengren's $S$",
-    'rosengren_sx': r"Rosengren's $S^{\text{x}}$",
     'carrol_d2':    'Carroll\'s $D_2$',
+    'rosengren_s':  r"Rosengren's $S$",
     'lyne_d3':      'Lyne\'s $D_3$',
+    'gries_dp':     'Gries\'s DP',
+    # TODO Squish Rosengren's a little via mathtext spacing:
+    #'rosengren_s':  r"$\mathrm{R\;\!\!o\;\!\!s\;\!\!e\;\!\!n\;\!\!g\;\!\!r\;\!\!e\;\!\!n\;\!\!}$'$\mathrm{\;\!\!s\;\!\!}$ $S$",
+    'sort_gini':    'Gini Index',
+    's2':           r'$S_2$',
     'frequency':    'Frequency'
     }
+
+MEASURE2NAME = {
+    'range':        'Range',
+    'juilland_d':   'Juilland\'s $D$',
+    'carrol_d2':    'Carroll\'s $D_2$',
+    'rosengren_s':  r"Rosengren's $S$",
+    'lyne_d3':      'Lyne\'s $D_3$',
+    'gries_dp':     'Gries\'s DP',
+    # TODO Squish Rosengren's a little via mathtext spacing:
+    #'rosengren_s':  r"$\mathrm{R\;\!\!o\;\!\!s\;\!\!e\;\!\!n\;\!\!g\;\!\!r\;\!\!e\;\!\!n\;\!\!}$'$\mathrm{\;\!\!s\;\!\!}$ $S$",
+    'sort_gini':    'Gini Index',
+    's2':           r'$S_2$',
+    'frequency':    'Frequency'
+    }
+
+MEASURE2TAB_NAME = MEASURE2NAME.copy()
+# TODO MEASURE2TAB_NAME['rosengren_s'] = r"Rosengren's $S$"
 PART_SUF2NAME = {
     '_videos': 'Videos',
     '_channels': 'Channels',
     '': 'Categories'
     }
 
+PART2JA = {
+    'videos': '動画',
+    'channels': 'チャンネル',
+    'categories': 'カテゴリ'
+    }
 
-def print_log_tables(r2_wo_logf, r2_w_logf):
+PART2BNC = {
+    'videos': 'Texts',
+    'categories': 'Categories'
+    }
+
+
+def print_log_tables(r2_wo_logf, r2_w_logf, bnc=False):
     print()
     print()
     print('=========== LOG TABLES (to be edited for paper) =========')
@@ -128,9 +154,9 @@ def print_log_tables(r2_wo_logf, r2_w_logf):
         ('wo', r2_wo_logf),
         ('w', r2_w_logf)
         ):
-        eval_log = {part: [] for part in PART_SUF2NAME.values()}
+        eval_log = {part: [] for part in mask_parts(PART_SUF2NAME.values(), bnc)}
         for m_base in MEASURE2NAME:
-            for part_suf, part in PART_SUF2NAME.items():
+            for part_suf, part in mask_parts(PART_SUF2NAME.items(), bnc):
                 if m_base == 'frequency':
                     if name == 'wo':
                         if part_suf:
@@ -155,11 +181,12 @@ def print_log_tables(r2_wo_logf, r2_w_logf):
                 else:
                     v = rf'{v} ({nbetter})'
                 eval_log[part].append(v)
-        idx = list(MEASURE2NAME.values())
+        idx = list(MEASURE2TAB_NAME.values())
         if name == 'w':
             idx = idx[:-1]
         df = pd.DataFrame(eval_log, index=idx)
-        print(rf'\label{{tab:log{name}}}')
+        label_prefix = 'bnc-' if bnc else ''
+        print(rf'\label{{tab:{label_prefix}log{name}}}')
         print(df.to_latex(column_format='lccc'))
 
 def select_log_non_log(df: pd.DataFrame, to_log: set[str]):
@@ -168,7 +195,8 @@ def select_log_non_log(df: pd.DataFrame, to_log: set[str]):
     do_log  = idx.str.removeprefix('log_').apply(to_log.__contains__)
     return df[is_log == do_log]
 
-def measure_part_df_frequency_idx(df: pd.DataFrame, to_log: set[str], index=None):
+def measure_part_df_frequency_idx(df: pd.DataFrame, to_log: set[str], index=None,
+                                  bnc: bool = False):
     mean = df.mean(axis=1)
     mean = select_log_non_log(mean, to_log)
     classif = mean.index.to_series()
@@ -187,26 +215,76 @@ def measure_part_df_frequency_idx(df: pd.DataFrame, to_log: set[str], index=None
         mp_mean = mp_mean.reindex(index=index)
     else:
         mp_mean = mp_mean.sort_values(by='max')
-    mp_mean = mp_mean[[
+    mp_mean = mp_mean[mask_parts([
         'categories', 'channels', 'videos'
-        ]]
+        ], bnc)]
     return (mp_mean, mean.loc['log_frequency'], mp_mean.index)
 
-def main(args: argparse.Namespace):
+def filter_dict(kvs: list) -> dict:
+    return {k: v for k, v in kvs if v is not None}
 
-    font_size = 10.5
+
+def mask_parts(parts, bnc=False):
+    pl = list(parts)
+    assert len(pl) == 3
+    if bnc:
+        return [pl[0], pl[2]]   # categories and "videos"
+    return pl
+
+
+def main(args: argparse.Namespace):
+    if args.japanese_labels:
+        import japanize_matplotlib
+    n_datasets = 11
+    if args.bnc or args.english_only:
+        n_datasets = 3
+
+    font_size = (
+#        10 if args.small else
+        10.5
+        )
     plt.rcParams.update({'font.size': font_size})
+
+    mname = (
+        'wiki-measures' if args.wiki else
+        'bnc-measures' if args.bnc else
+        'measures'
+        )
+
+
+    TASK2R_FILES = {
+        task: f'experiments/{mname}-{task}-corr-aggregate-correlation.tsv'
+        for task in MEASURES_TASKS
+        }
+    TASK2P_FILES = {
+        task: f'experiments/{mname}-{task}-corr-aggregate-pvalues.tsv'
+        for task in MEASURES_TASKS
+        }
+    TASK2R2_FILES = {
+        task: f'experiments/{mname}-{task}-corr-aggregate-adjusted_r2.tsv'
+        for task in MEASURES_TASKS
+        }
+    TASK2N_FILES = {
+        task: f'experiments/{mname}-{task}-corr-aggregate-n.tsv'
+        for task in MEASURES_TASKS
+        }
+
+    def read_table(f):
+        df = pd.read_table(f, index_col=0)
+        if args.english_only:
+            df = df[['English']]
+        return df
 
 
     # PCC (r) for a single variable (in index)
-    task2r = {task: pd.read_table(f, index_col=0) for task, f in TASK2R_FILES.items()}
+    task2r = {task: read_table(f) for task, f in TASK2R_FILES.items()}
     # P-values for the difference between correlation with log frequency and the
     # variable in index
-    task2p = {task: pd.read_table(f, index_col=0) for task, f in TASK2P_FILES.items()}
+    task2p = {task: read_table(f) for task, f in TASK2P_FILES.items()}
     # Numbers of examples:
-    task2n = {task: pd.read_table(f, index_col=0) for task, f in TASK2N_FILES.items()}
+    task2n = {task: read_table(f) for task, f in TASK2N_FILES.items()}
     # Adjusted R2 for two variables (the one in index + log frequency):
-    task2r2 = {task: pd.read_table(f, index_col=0) for task, f in TASK2R2_FILES.items()}
+    task2r2 = {task: read_table(f) for task, f in TASK2R2_FILES.items()}
 
     # columns will be (task, language):
     r = pd.concat(task2r, axis=1)
@@ -233,93 +311,140 @@ def main(args: argparse.Namespace):
 
 
     # This is in line with the results in `print_log_tables()`
-    w_log_measures = {
+    wo_log_measures = {
         'range_videos', 'range_channels',
-        'sort_gini_videos', 'sort_gini_channels',
         'rosengren_s_videos', 'rosengren_s_channels',
-        'frequency'}
-    wo_log_measures = {*w_log_measures, 'sort_gini_categories'}
+        'gries_dp_videos', 'gries_dp_channels',
+        'sort_gini_videos', 'sort_gini_channels',
+        's2_videos', 's2_channels',
+        'frequency'
+        }
+    w_log_measures = wo_log_measures # use the same for both
+    # w_log_measures = {
+    #     'range_videos', 'range_channels',
+    #     'rosengren_s_channels',
+    #     'lyne_d3_channels',
+    #     'gries_dp_videos',
+    #     'sort_gini_videos', 'sort_gini_channels', 'sort_gini',
+    #     's2_videos', 's2_channels',
+    #     'frequency'
+    #     }
 
     # never significantly worse than log f, never worse more than by 0.01
-    wo_good_measures = {'range_videos', 'range_channels'}
-    # better by 0.01 for at least 8/11 datasets:
-    w_good_measures = {'rosengren_s_categories', 'range_categories', 'range_videos', 'range_channels'}
+    wo_good_measures = (
+        {} if args.english_only else
+        {'range_videos', 's2_videos'} if args.bnc else
+        {'range_videos', 'range_channels'}
+        )
 
+    # better by 0.01 for at least 8/11 datasets (3/3 datasets):
+    w_good_measures = (
+        {} if args.english_only else
+        {'s2_categories', 'range_categories'} if args.bnc else
+        {'s2_categories', 'range_categories', 'range_videos', 'range_channels'}
+        )
 
-    wo_scores = pd.DataFrame({
-        ('mean', 'ALL'): my_round(wo_mean_delta_r2),
-        ('mean', 'fam'): my_round(delta_r2_wo_logf['fam'].mean(axis=1)),
-        ('mean', 'ldt'): my_round(delta_r2_wo_logf['ldt'].mean(axis=1)),
-        ('mean', 'mlsp'): my_round(delta_r2_wo_logf['mlsp'].mean(axis=1)),
-        ('mean', 'en'): my_round(delta_r2_wo_logf.xs('English', axis=1, level=1).mean(axis=1)),
-        ('mean', 'ja'): my_round(delta_r2_wo_logf.xs('Japanese', axis=1, level=1).mean(axis=1)),
-        ('mean', 'es'): my_round(delta_r2_wo_logf.xs('Spanish', axis=1, level=1).mean(axis=1)),
-        ('mean', 'id'): my_round(delta_r2_wo_logf.xs('Indonesian', axis=1, level=1).mean(axis=1)),
-        ('mean', 'zh'): my_round(delta_r2_wo_logf.xs('Chinese', axis=1, level=1).mean(axis=1)),
-        ('p_strict', 'ALL'): wo_sig_stronger.sum(axis=1),
-        ('strict', 'ALL'): wo_tad_stronger.sum(axis=1),
-        ('p_relaxed', 'ALL'): wo_not_sig_weaker.sum(axis=1),
-        ('relaxed', 'ALL'): wo_not_too_weak.sum(axis=1),
-        }).sort_values(by=('mean', 'ALL'))
+    en_only = args.bnc or args.english_only
+    wo_scores = pd.DataFrame(filter_dict([
+        (('mean', 'ALL'), my_round(wo_mean_delta_r2)),
+        (('mean', 'fam'), my_round(delta_r2_wo_logf['fam'].mean(axis=1))),
+        (('mean', 'ldt'), my_round(delta_r2_wo_logf['ldt'].mean(axis=1))),
+        (('mean', 'mlsp'), my_round(delta_r2_wo_logf['mlsp'].mean(axis=1))),
+        (('mean', 'en'), my_round(delta_r2_wo_logf.xs('English', axis=1, level=1).mean(axis=1))),
+        (('mean', 'ja'), None if en_only else my_round(delta_r2_wo_logf.xs('Japanese', axis=1, level=1).mean(axis=1))),
+        (('mean', 'es'), None if en_only else my_round(delta_r2_wo_logf.xs('Spanish', axis=1, level=1).mean(axis=1))),
+        (('mean', 'id'), None if en_only else my_round(delta_r2_wo_logf.xs('Indonesian', axis=1, level=1).mean(axis=1))),
+        (('mean', 'zh'), None if en_only else my_round(delta_r2_wo_logf.xs('Chinese', axis=1, level=1).mean(axis=1))),
+        (('p_strict', 'ALL'), wo_sig_stronger.sum(axis=1)),
+        (('strict', 'ALL'), wo_tad_stronger.sum(axis=1)),
+        (('p_relaxed', 'ALL'), wo_not_sig_weaker.sum(axis=1)),
+        (('relaxed', 'ALL'), wo_not_too_weak.sum(axis=1)),
+        ])).sort_values(by=('mean', 'ALL'))
     if not args.all:
         wo_scores = wo_scores[wo_scores['p_strict', 'ALL'] > 0]
     if not args.no_select_log:
         wo_scores = select_log_non_log(wo_scores, wo_log_measures)
     print(wo_scores.to_string())
 
-
-
     print()
     print('WITH LOG F')
-    w_scores = pd.DataFrame({
-        ('mean', 'ALL'): my_round(w_mean_delta_r2),
-        ('mean', 'fam'): my_round(delta_r2_w_logf['fam'].mean(axis=1)),
-        ('mean', 'ldt'): my_round(delta_r2_w_logf['ldt'].mean(axis=1)),
-        ('mean', 'mlsp'): my_round(delta_r2_w_logf['mlsp'].mean(axis=1)),
-        ('mean', 'en'): my_round(delta_r2_w_logf.xs('English', axis=1, level=1).mean(axis=1)),
-        ('mean', 'ja'): my_round(delta_r2_w_logf.xs('Japanese', axis=1, level=1).mean(axis=1)),
-        ('mean', 'es'): my_round(delta_r2_w_logf.xs('Spanish', axis=1, level=1).mean(axis=1)),
-        ('mean', 'id'): my_round(delta_r2_w_logf.xs('Indonesian', axis=1, level=1).mean(axis=1)),
-        ('mean', 'zh'): my_round(delta_r2_w_logf.xs('Chinese', axis=1, level=1).mean(axis=1)),
-        ('strict', 'ALL'): w_tad_stronger.sum(axis=1),
-        ('strict', 'fam'): w_tad_stronger['fam'].sum(axis=1),
-        ('strict', 'ldt'): w_tad_stronger['ldt'].sum(axis=1),
-        ('strict', 'mlsp'): w_tad_stronger['mlsp'].sum(axis=1),
-        ('relaxed', 'ALL'): w_not_too_weak.sum(axis=1),
-        }).sort_values(by=('mean', 'ALL'))
+    w_scores = pd.DataFrame(filter_dict([
+        (('mean', 'ALL'), my_round(w_mean_delta_r2)),
+        (('mean', 'fam'), my_round(delta_r2_w_logf['fam'].mean(axis=1))),
+        (('mean', 'ldt'), my_round(delta_r2_w_logf['ldt'].mean(axis=1))),
+        (('mean', 'mlsp'), my_round(delta_r2_w_logf['mlsp'].mean(axis=1))),
+        (('mean', 'en'), my_round(delta_r2_w_logf.xs('English', axis=1, level=1).mean(axis=1))),
+        (('mean', 'ja'), None if en_only else my_round(delta_r2_w_logf.xs('Japanese', axis=1, level=1).mean(axis=1))),
+        (('mean', 'es'), None if en_only else my_round(delta_r2_w_logf.xs('Spanish', axis=1, level=1).mean(axis=1))),
+        (('mean', 'id'), None if en_only else my_round(delta_r2_w_logf.xs('Indonesian', axis=1, level=1).mean(axis=1))),
+        (('mean', 'zh'), None if en_only else my_round(delta_r2_w_logf.xs('Chinese', axis=1, level=1).mean(axis=1))),
+        (('strict', 'ALL'), w_tad_stronger.sum(axis=1)),
+        (('strict', 'fam'), w_tad_stronger['fam'].sum(axis=1)),
+        (('strict', 'ldt'), w_tad_stronger['ldt'].sum(axis=1)),
+        (('strict', 'mlsp'), w_tad_stronger['mlsp'].sum(axis=1)),
+        (('relaxed', 'ALL'), w_not_too_weak.sum(axis=1))
+        ])).sort_values(by=('mean', 'ALL'))
     if not args.all:
         w_scores = w_scores[w_scores['strict', 'ALL']>n_data/2]
     print(w_scores.to_string())
 
 
-    parts_wo_mean_r2, baseline_y, idx = measure_part_df_frequency_idx(r2_wo_logf, wo_log_measures)
+    parts_wo_mean_r2, baseline_y, idx = measure_part_df_frequency_idx(
+        r2_wo_logf, wo_log_measures, bnc=args.bnc
+        )
     # TESTING
     # r2_w_logf.loc['sort_gini_videos',:] = 0.5
     # r2_w_logf.loc['log_range_videos',:] = 0.45
     # r2_w_logf.loc['log_range_channels',:] = 0.45
-    parts_w_mean_r2, *_ = measure_part_df_frequency_idx(r2_w_logf, w_log_measures, index=idx)
+    parts_w_mean_r2, *_ = measure_part_df_frequency_idx(
+        r2_w_logf, w_log_measures, index=idx, bnc=args.bnc
+        )
 
     # original NLP 2025 paper: plt.figure(figsize=(11, 5))
 
-    plt.figure(figsize=(9, 5))
+    plt.figure(figsize=(
+        (13, 5) if args.small else
+        (
+            9.5,
+            6.05 if args.english_only else
+            5.55 if args.bnc else
+            5.35
+            )
+        ))
 
     palette = sns.color_palette('viridis')
-
+    colors = mask_parts(palette[::-2], bnc=args.bnc)
     barw = 0.75
 
-    parts_wo_mean_r2_display = parts_wo_mean_r2.rename(columns=str.capitalize)
+    if args.no_extended:
+        parts_wo_mean_r2.drop(
+            parts_wo_mean_r2.index[parts_wo_mean_r2.index.str.contains('x')],
+            inplace=True
+            )
+        parts_w_mean_r2.drop(
+            parts_w_mean_r2.index[parts_w_mean_r2.index.str.contains('x')],
+            inplace=True
+            )
+
+    part2name = (
+        PART2BNC.get if args.bnc else
+        PART2JA.get if args.japanese_labels else
+        str.capitalize
+        )
+
+    parts_wo_mean_r2_display = parts_wo_mean_r2.rename(columns=part2name)
     parts_wo_mean_r2_display = parts_wo_mean_r2_display.rename(index=MEASURE2NAME)
 
-    parts_w_mean_r2_display = parts_w_mean_r2.rename(columns=str.capitalize)
+    parts_w_mean_r2_display = parts_w_mean_r2.rename(columns=part2name)
     parts_w_mean_r2_display = parts_w_mean_r2_display.rename(index=MEASURE2NAME)
 
     ax = parts_wo_mean_r2_display.plot(
-        kind='bar', stacked=False, ax=plt.gca(), color=palette[::-2],
+        kind='bar', stacked=False, ax=plt.gca(), color=colors,
         width=barw
         )
 
     parts_w_mean_r2_display.plot(
-        kind='bar', stacked=False, ax=plt.gca(), color=palette[::-2],
+        kind='bar', stacked=False, ax=plt.gca(), color=colors,
         # White hatching instead of alpha=0.5:
         edgecolor='white', linewidth=0, hatch_linewidth=1.5, hatch='//////',
         zorder=-1,
@@ -327,26 +452,46 @@ def main(args: argparse.Namespace):
         )
 
     # Y axis:
-    plt.gca().set_ylim([0, 0.615])    # nicer and labels fit
-    plt.yticks(np.arange(0, 0.51, 0.1), rotation='horizontal')
+    plt.gca().set_ylim([
+        0,
+        0.615 if args.small else
+        # Higher values for English => more space needed:
+        0.63 if args.bnc else
+        0.69 if args.english_only else
+        0.61
+        ])    # nicer and labels fit
+    plt.yticks(np.arange(0,
+                         0.61 if args.english_only else 0.51, 0.1
+                         ), rotation='horizontal')
 
     # X axis:
     plt.xticks(rotation='horizontal', va='baseline', y=-0.02)   # align to baseline
 
     # Baseline:
-    plt.axhline(y=baseline_y, linestyle='--', linewidth=1, color=palette[0])
+    plt.axhline(y=baseline_y, linestyle='--', linewidth=1, color='black')
     plt.text(
         x=-0.52,
         y=baseline_y - 0.025,  # Slightly below the baseline
-        s=f'log-frequency: {baseline_y:.3f}',
+        s=(
+            f'対数頻度: {baseline_y:.3f}' if args.japanese_labels else
+            f'Log-Frequency: {baseline_y:.3f}'
+            ),
         fontsize=font_size,
-        ha='left'
+        ha='left',
+        # backgroundcolor=(1, 1, 1, 0.5),
+        # no edge (outline):
+        bbox=dict(facecolor=(1, 1, 1, 0.5), edgecolor='none')
     )
 
     # Extra annotation:
     for i, m in enumerate(parts_w_mean_r2.index):
         for j, p in enumerate(parts_w_mean_r2.columns):
-            x = i + (j - 1) / len(parts_w_mean_r2.columns) * barw
+            n = len(parts_w_mean_r2.columns)
+            d = 0
+            if n == 2:
+                n = 1.5
+                d = 0.5
+            x = i + (j - 1 + d) / len(parts_w_mean_r2.columns) * barw
 
             # W:
             y = parts_w_mean_r2.loc[m, p]
@@ -367,7 +512,8 @@ def main(args: argparse.Namespace):
             # WO:
             y = parts_wo_mean_r2.loc[m, p]
             s = f'{y:.3f}'
-            if f'{m}_{p}' in wo_log_measures:
+            m_p = f'{m}_{p}'
+            if m_p in wo_log_measures:
                 s += ' (log)'
             if f'{m}_{p}' in wo_good_measures:
                 s += ' ★'
@@ -376,21 +522,45 @@ def main(args: argparse.Namespace):
                      )
 
     # Add labels and title
-    plt.xlabel('Dispersion Measure (DM)')
-    plt.ylabel(r'$R_\text{a}^2$ (Mean Over 11 Datasets)') # $\overline{R_\text{a}^2}$
+    plt.xlabel(
+        '散布度' if args.japanese_labels else
+        'Dispersion Measure (DM) based on BNC (English)' if args.bnc else
+        'Dispersion Measure (DM) based on TUBELEX (English only)'
+        if args.english_only else
+        'Dispersion Measure (DM) based on TUBELEX (5 languages)'
+        )
+    plt.ylabel(
+        rf'$R_\text{{a}}^2$（{n_datasets} データセットの平均）' if args.japanese_labels else
+        rf'$R_\text{{a}}^2$ (Mean Over {n_datasets} Datasets)'
+        ) # $\overline{R_\text{a}^2}$
+    legend_titles = (
+        ('一つの変数（散布度）', '二つの変数 (散布度、対数頻度)') if args.japanese_labels else
+        ('Single Variable (DM)', 'Two Variables (DM, log-freq.)')
+        )
+    if args.small:
+        legend_w = 0.245
+    else:
+        legend_w = (0.31  if args.japanese_labels else 0.3 )
+
+
+    n_parts = len(colors)
 
     handles, labels = ax.get_legend_handles_labels()
     legend1 = plt.legend(
-        handles[:3], labels[:3],
-        title='Single Variable (DM)', alignment='left',
-        bbox_to_anchor=(0.7, 0.0, 0.3, 0.0), loc='lower left', mode='expand',
+        handles[:n_parts], labels[:n_parts],
+        title=legend_titles[0], alignment='left',
+        bbox_to_anchor=(1 - legend_w, 0.0, legend_w, 0.0), loc='lower left',
+        mode='expand',
         #loc='center right',
         framealpha=1
         )
     plt.legend(
-        handles[3:], labels[3:],
-        title='Two Variables (DM, log-freq.)', alignment='left',
-        bbox_to_anchor=(0.7, 0.23, 0.3, 0.0), loc='lower left', mode='expand',
+        handles[n_parts:], labels[n_parts:],
+        title=legend_titles[1], alignment='left',
+        bbox_to_anchor=(1 - legend_w,
+                        0.18 if args.bnc else 0.23,
+                        legend_w, 0.0), loc='lower left',
+        mode='expand',
         # bbox_to_anchor=(0, 0.575), loc='lower left',     # under legend1
         framealpha=1
         )
@@ -399,10 +569,21 @@ def main(args: argparse.Namespace):
 
     # Show the plot
     # plt.show()
-    plt.savefig('experiments/figures/dispersion_adj_r2.pdf', bbox_inches='tight')
+    dname = (
+        'wiki_dispersion' if args.wiki else
+        'bnc_dispersion' if args.bnc else
+        'en_dispersion' if args.english_only else
+        'dispersion'
+        )
+    plt.savefig(
+        args.output if (args.output is not None) else
+        f'experiments/figures/{dname}_adj_r2_ja.pdf' if args.japanese_labels else
+        f'experiments/figures/{dname}_adj_r2.pdf',
+        bbox_inches='tight'
+        )
 
 
-    print_log_tables(r2_wo_logf, r2_w_logf)
+    print_log_tables(r2_wo_logf, r2_w_logf, bnc=args.bnc)
 
 
 #     print()

@@ -49,23 +49,37 @@ CORPUS2ID = {
 MEASURES = [
     'frequency',
     'range',
-#     'weighted_range',   # TODO?
-#     'range_nofreq',
-#     'range_nofreq_gries',
+    #     'weighted_range',   # TODO?
+    #     'range_nofreq',
+    #     'range_nofreq_gries',
     'sort_gini',
-#    'maxmin',
+    #    'maxmin',
     'juilland_d',
-#     'vmr',
+    #     'vmr',
     'gries_dp',
+    #    'dp2',
     'rosengren_s',
-    'rosengren_sx',
+    's2',
+    #    's3',
     'carrol_d2',
     'lyne_d3',
     ]
 TRANSFORMS = ['', 'log_']   # NO IMPROVEMENT: 'sqrt_'
 VARIANTS = ['', '_channels', '_videos']
-MEASURE2ID = { # TODO
+MEASURE2ID = {
     tm: f'tubelex-{tm}'
+    for t in TRANSFORMS
+    for v in VARIANTS
+    for m in MEASURES for tm in (t + m + v,)
+    }
+WIKI_MEASURE2ID = {
+    tm: f'wiki-{tm}'
+    for t in TRANSFORMS
+    for v in VARIANTS
+    for m in MEASURES for tm in (t + m + v,)
+    }
+BNC_MEASURE2ID = {
+    tm: f'bnc-{tm}'
     for t in TRANSFORMS
     for v in VARIANTS
     for m in MEASURES for tm in (t + m + v,)
@@ -113,9 +127,16 @@ LANG2ALT_DESC = {
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
-    action = parser.add_mutually_exclusive_group()
-    action.add_argument('--measures', action='store_true',
+    parser.add_argument('--measures', action='store_true',
                         help='Aggregate expriments with dispersion measures.')
+    corp = parser.add_mutually_exclusive_group()
+    corp.add_argument('--wiki', action='store_true',
+                        help='Use wiki-based dispersion measures.')
+    corp.add_argument('--bnc', action='store_true',
+                        help='Use BNC-based dispersion measures.')
+    corp.add_argument(
+        '--correlation-coefficient', '-c', choices=['r', 'rho', 'tau'], default=None
+        )
     return parser.parse_args()
 
 
@@ -131,6 +152,8 @@ def main(args: argparse.Namespace):
                 f'experiments/measures-{task}-corr',
                 ['correlation',
                  'adjusted_r2',
+                 'corr_wiki' if args.wiki else
+                 'corr_bnc' if args.bnc else
                  'corr_tubelex',
                  'n', 'n_missing',
                  'corr_without_missing'
@@ -139,7 +162,11 @@ def main(args: argparse.Namespace):
                 task
                 ) for task in MEASURES_TASKS),
             )
-        method2id = MEASURE2ID
+        method2id = (
+            WIKI_MEASURE2ID if args.wiki else
+            BNC_MEASURE2ID if args.bnc else
+            MEASURE2ID
+            )
     else:
         data_to_aggregate = (
             ('experiments/mlsp-results', ['R2', 'Pearson\'s r'], True, None),
@@ -159,6 +186,10 @@ def main(args: argparse.Namespace):
         method2id = CORPUS2ID
 
     for filename, cols, add_mlsp, task in data_to_aggregate:
+        out_filename = (
+            filename.replace('measures-', 'wiki-measures-') if args.wiki else
+            filename.replace('measures-', 'bnc-measures-') if args.bnc else filename
+            )
 
         d = defaultdict(dict)
 
@@ -195,15 +226,23 @@ def main(args: argparse.Namespace):
                     ], names=None)
 
             col_id = COL2ID.get(col, col)
-            combined.to_csv(f'{filename}-aggregate-{col_id}.tsv', sep='\t')
+            combined.to_csv(f'{out_filename}-aggregate-{col_id}.tsv', sep='\t')
             combined_dfs[col] = combined
 
         if 'correlation' in cols:
-            if 'corr_tubelex' in cols:
-                corr2_col = 'corr_tubelex'
+            has_corr_tubelex    = 'corr_tubelex' in cols
+            has_corr_wiki       = 'corr_wiki' in cols
+            has_corr_bnc        = 'corr_bnc' in cols
+            if has_corr_tubelex or has_corr_wiki or has_corr_bnc:
+                corr2_col = (
+                    'corr_tubelex' if has_corr_tubelex else
+                    'corr_wiki' if has_corr_wiki else
+                    'corr_bnc'
+                    )
                 if args.measures:
                     corp2 = 'log_frequency'
                 else:
+                    assert not (has_corr_wiki or has_corr_bnc)
                     corp2 = TUBELEX
             else:
                 assert 'corr_gini' in cols, (filename, cols)
@@ -225,7 +264,7 @@ def main(args: argparse.Namespace):
                     in zip(lang_r_task_corp, lang_r_corp_tubelex, lang_n)
                     ]
             df_pvalues = pd.DataFrame(d_pvalues, index=r_task_corp.index)
-            df_pvalues.to_csv(f'{filename}-aggregate-pvalues.tsv', sep='\t',
+            df_pvalues.to_csv(f'{out_filename}-aggregate-pvalues.tsv', sep='\t',
                               float_format='%4f')
 
             # unnecessary

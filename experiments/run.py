@@ -14,6 +14,7 @@ from functools import partial
 from typing import NamedTuple, Any
 from tqdm import tqdm
 import scipy
+from scipy.stats import kendalltau, spearmanr, pearsonr
 import psutil
 from sklearn.linear_model import RidgeCV, LinearRegression
 from sklearn.metrics import (
@@ -91,6 +92,8 @@ def adjusted_r2(
     if len(xs.shape) == 1:  # xs was a 1D array/simple Sequence
         xs = xs.reshape(-1, 1)
     n, p = xs.shape  # #examples, #variables
+    if np.isnan(xs).any() or np.isnan(y).any():
+        return np.nan
     assert n == len(y), (xs.shape, y.shape)
     linear_regression = LinearRegression().fit(xs, y)
     r2 = linear_regression.score(xs, y)
@@ -181,9 +184,11 @@ _MEASURE2SPEC_UNIT = {
     'juilland_d':           MeasureSpec(FrequencyData.juilland_d),
     'vmr':                  MeasureSpec(FrequencyData.vmr_dispersion),
     'gries_dp':             MeasureSpec(FrequencyData.gries_dp_dispersion),
+    'dp2':                  MeasureSpec(FrequencyData.dp2),
     'lyne_d3':              MeasureSpec(FrequencyData.lyne_d3),
     'rosengren_s':          MeasureSpec(FrequencyData.rosengren_s),
-    'rosengren_sx':         MeasureSpec(FrequencyData.rosengren_sx),
+    's2':                   MeasureSpec(FrequencyData.s2),
+    's3':                   MeasureSpec(FrequencyData.s3),
     # DELETEME 'sqrt':                 MeasureSpec(FrequencyData.rosengren_like_sqrt),
     'carrol_d2':            MeasureSpec(FrequencyData.carrol_d2)
     }
@@ -415,7 +420,11 @@ def get_tubelex_freq_data(
     params: Optional[dict] = None,
     unit: Optional[str] = None,
     cache_dir: Optional[str] = None,        # required if unit is not None, else ignored
+    wiki: bool = False,                      # corpus-wiki instead of tubelex (same form)
+    bnc: bool = False                       # bnc instead of tubelex (same form)
     ) -> FrequencyData:
+
+    assert not (wiki and bnc)
 
     if tokenization is not None:
         assert form == 'surface'
@@ -438,17 +447,29 @@ def get_tubelex_freq_data(
             else None
             ))
 
+    if wiki:
+        dirname = 'corpus-wiki'
+        basename = f'tubelex-{language}'
+        if language in ('en', 'es'):
+            basename += '-1m-regex'
+    elif bnc:
+        dirname = 'frequencies'
+        basename = 'bnc'
+    else:
+        dirname = 'frequencies'
+        basename = f'tubelex-{language}'
+
     if unit is not None:
         assert cache_dir is not None, 'unit requires cache_dir'
         os.makedirs(cache_dir, exist_ok=True)
-        filename = f'tubelex-{language}-nfkc-lower_{unit}.pkl'
-        counts = CountArrays(os.path.join('frequencies', filename),
+        filename = f'{basename}-nfkc-lower_{unit}.pkl'
+        counts = CountArrays(os.path.join(dirname, filename),
                              cache=os.path.join(cache_dir, filename))
     else:
         counts = None
 
     return FrequencyData.from_file(
-        filename=f'frequencies/tubelex-{language}-nfkc-lower.tsv.xz',
+        filename=f'{dirname}/{basename}-nfkc-lower.tsv.xz',
         total_row=True,
         counts=counts,
         **params
@@ -612,6 +633,8 @@ def parse_args() -> argparse.Namespace:
                         help='Train linear regression.')
     action.add_argument('--correlation', action='store_true',
                         help='Compute correlation.')
+    parser.add_argument('--load-trial', action='store_true',
+                        help='Load trial instead of test for --correlation.')
 
     parser.add_argument('--stats-size-coverage',
                         default='experiments/stats-size-coverage.csv',
@@ -632,7 +655,7 @@ def parse_args() -> argparse.Namespace:
         'Cache TUBELEX frequencies for correlation pvalue computation.'
         ))
     parser.add_argument(
-        '--cached', default='tubelex', choices=['tubelex', 'gini'],
+        '--cached', default='tubelex', choices=['tubelex', 'gini', 'wiki', 'bnc'],
         help='Cache/Read "tubelex" (default) or "gini" values for correlation pvalues.'
         )
     parser.add_argument('--cache-dir', default='experiments/cache', help=(
@@ -733,15 +756,23 @@ def parse_args() -> argparse.Namespace:
             )
         )
     parser.add_argument(
-        '--wikipedia', nargs='*',
+        '--corpus-wiki', nargs='*',
         default=[], help=(
-            'Use Wikipedia for these language codes. Overrides --tubelex'
+            'Use Wikipedia from corpus-wiki directory'
+            'based on Cirrus search dumps. Overrides --tubelex'
+            )
+        )
+    parser.add_argument(
+        '--wikipedia-wfc', nargs='*',
+        default=[], help=(
+            'Use Wikipedia (wikipedia-word-frequency-clean) '
+            'for these language codes. Overrides --corpus-wiki'
             )
         )
     parser.add_argument(
         '--gini', nargs='*',
         default=[], help=(
-            'Use GINI for these language codes (en, ja). Overrides --wikipedia'
+            'Use GINI for these language codes (en, ja). Overrides --wikipedia-wfc'
             )
         )
     parser.add_argument(
@@ -750,6 +781,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         '--spoken-bnc', action='store_true',
         help='Use spoken portion of BNC for English.'
+        )
+    parser.add_argument(
+        '--bnc', action='store_true',
+        help='Use BNC for English (TUBELEX-style, with texts and categories).'
         )
     parser.add_argument(
         '--espal', action='store_true', help='Use EsPal for Spanish.'
@@ -1139,7 +1174,9 @@ def main(args: argparse.Namespace) -> None:
     measure         = None
     tracked_measure = None
     if args.measure:
-        assert args.tubelex, '--measure requires --tubelex'
+        assert args.tubelex or args.corpus_wiki or args.bnc, (
+            '--measure requires --tubelex, --corpus-wiki or --bnc'
+            )
         measure = MEASURE2SPEC[args.measure]
         tracked_measure = CPUTimeTracker(measure)
     log_measure = args.log_measure
@@ -1174,16 +1211,22 @@ def main(args: argparse.Namespace) -> None:
 
     if cache:
         if not (((cached == 'gini' and args.gini) or
+                 (cached == 'wiki' and args.corpus_wiki) or
+                 (cached == 'bnc' and args.bnc) or
                  (cached == 'tubelex' and args.tubelex)) and
                 args.category is None and
-                args.tokenization is None and
+                # allow regex tokenization for wiki/bnc:
+                ((args.tokenization is None) or cached in ('wiki', 'bnc')) and
                 args.dictionary is None and
                 args.form == 'surface'
                 ):
             raise Exception(
-                f'Non-default arguments incompatible with --cache-tubelex:\n'
+                f'Non-default arguments incompatible with --cache:\n'
+                f'--cached: {args.cached}\n'
                 f'--tubelex: {args.tubelex}\n'
                 f'--gini: {args.gini}\n'
+                f'--corpus-wiki: {args.corpus_wiki}\n'
+                f'--bnc: {args.bnc}\n'
                 f'--category: {args.category}\n'
                 f'--tokenization: {args.tokenization}\n'
                 f'--dictionary: {args.dictionary}\n'
@@ -1235,7 +1278,13 @@ def main(args: argparse.Namespace) -> None:
         lang2freq_data[lang] = get_opensubtitles_freq_data(lang)
         if tokenize_c_j and (lang in LANG2KYTEA_MODEL):
             lang2corpus_specific_tokenizer[lang] = get_kytea_tokenizer(lang)
-    for lang in chain(args.wikipedia, subtlex, args.gini):
+    for lang in args.corpus_wiki:
+        if lang in ('en', 'es'):    # TODO search for "1m-regex"
+            lang2corpus_specific_tokenizer[lang] = PAT_SPLIT.split
+    if args.bnc:
+        # we processed BNC's the data, so this should be the best tokenization:
+        lang2corpus_specific_tokenizer['en'] = PAT_SPLIT.split
+    for lang in chain(args.wikipedia_wfc, subtlex, args.gini):
         # These corpora use simple regex tokenization (except for zh/ja)
         # OpenSubtitles, SubIMDB, BNC use something more advanced (similar to Stanza)
         if lang not in ('zh', 'ja'):
@@ -1243,18 +1292,26 @@ def main(args: argparse.Namespace) -> None:
     if args.activ_es:
         lang2corpus_specific_tokenizer['es'] = PAT_SPLIT.split
 
-    assert not args.category or args.tubelex, '--category requires --tubelex'
-    for lang in args.tubelex:
-        lang2freq_data[lang] = get_tubelex_freq_data(
-            lang,
-            form=args.form, tokenization=args.tokenization,
-            category=args.category,
-            params=(measure.params if (measure is not None) else None),
-            unit=(measure.unit if (measure is not None) else None),
-            cache_dir=cache_dir
-            )
+    assert not args.category or (
+        args.tubelex or args.bnc
+        ), '--category requires --tubelex --bnc'
+    for is_wiki, is_bnc, langs in (
+        (False, False, args.tubelex),
+        (True, False, args.corpus_wiki),
+        (False, True, ['en'] if args.bnc else [])
+        ):
+        for lang in langs:
+            lang2freq_data[lang] = get_tubelex_freq_data(
+                lang,
+                form=args.form, tokenization=args.tokenization,
+                category=args.category,
+                params=(measure.params if (measure is not None) else None),
+                unit=(measure.unit if (measure is not None) else None),
+                cache_dir=cache_dir,
+                wiki=is_wiki, bnc=is_bnc
+                )
 
-    for lang in args.wikipedia:
+    for lang in args.wikipedia_wfc:
         lang2freq_data[lang] = get_wiki_freq_data(lang)
 
     for lang in args.gini:
@@ -1294,7 +1351,7 @@ def main(args: argparse.Namespace) -> None:
 
     all_langs = set(chain(
         subtlex, args.opensubtitles, args.tubelex,
-        args.wikipedia, args.gini, args.wordfreq,
+        args.wikipedia_wfc, args.gini, args.wordfreq,
         ['en'] if (subimdb or spoken_bnc) else [],
         ['zh'] if (hkust_mtsc) else [],
         ['es'] if (espal or alonso or (activ_es_func is not None)) else [],
@@ -1383,7 +1440,8 @@ def main(args: argparse.Namespace) -> None:
     if correlation:
         print(
             f'file\tlanguage\tcorrelation\tadjusted_r2\tcorr_{cached}\t'
-            f'n\tn_missing\tcorr_without_missing'
+            f'n\tn_missing\tcorr_without_missing\t'
+            f'r\tr_p\trho\trho_p\ttau\ttau_p'
             )
     elif not train and args.metrics:
         print('file\tlanguage\tPearson\'s r\tMAE\tMSE\tR2')
@@ -1394,7 +1452,11 @@ def main(args: argparse.Namespace) -> None:
             )
         if mlsp_subsets:
             try:
-                dataset = get_mlsp_dataset(input_id, train=train, token=args.token)
+                dataset = get_mlsp_dataset(
+                    input_id,
+                    train=(train or args.load_trial),
+                    token=args.token
+                    )
             except Exception:
                 raise Exception(
                     f'Cannot retrieve dataset. Check the above exception, that you '
@@ -1499,7 +1561,7 @@ def main(args: argparse.Namespace) -> None:
                     f' - measure:                  {args.measure}\n'
                     f' - smooth:                   {args.smooth}\n'
                     f' - eps_clip:                 {args.eps_clip}\n'
-                    f' - zero_clip:                 {args.eps_clip}\n'
+                    f' - zero_clip:                {args.zero_clip}\n'
                     f' - log_measure:              {args.log_measure}\n'
                     f' - sqrt_measure:             {args.sqrt_measure}\n'
                     )
@@ -1553,6 +1615,12 @@ def main(args: argparse.Namespace) -> None:
                             logf_cached = np.full_like(logf, np.nan)
 
                 r = pearson_r(logf, c)
+
+                # With a p-value (two-sided)
+                rp = pearsonr(logf, c)
+                rho = spearmanr(logf, c)
+                tau = kendalltau(logf, c)
+
                 r2_adj = adjusted_r2((logf, logf_cached), c)
                 r_cached = pearson_r(logf, logf_cached)
                 n = len(logf)
@@ -1560,7 +1628,10 @@ def main(args: argparse.Namespace) -> None:
                 r_valid = pearson_r(logf[f_valid], c[f_valid])
                 print(
                     f'{input_id}\t{LANG2FULL_NAME[lang]}\t{r}\t{r2_adj}\t{r_cached}\t'
-                    f'{n}\t{n_missing}\t{r_valid}'
+                    f'{n}\t{n_missing}\t{r_valid}\t'
+                    f'{rp.statistic}\t{rp.pvalue}\t'
+                    f'{tau.statistic}\t{tau.pvalue}\t'
+                    f'{rho.statistic}\t{rho.pvalue}'
                     )
                 for fields, p in zip(data, logf):
                     print('\t'.join((

@@ -6,7 +6,7 @@ export HF_DATASETS_OFFLINE=1
 # Exit on error:
 set -e
 
-for task in mlsp
+for task in mlsp #ldt fam
 	do
 	if [[ "$task" = 'mlsp' ]]
 	then
@@ -25,11 +25,10 @@ for task in mlsp
 	echo '==========='
 	echo
 	
-	for measure_method in rosengren_sx # gries_dp lyne_d3
-		# frequency range lyne_d3 juilland_d vmr gries_dp rosengren_s carrol_d2
-		# TODO sorted_gini separately DELETEME simple_frequency, sqrt weighted_range
+	for measure_method in frequency range lyne_d3 rosengren_s s2 juilland_d \
+		gries_dp carrol_d2 sort_gini
 	do
-		for measure_variant in '_channels'
+		for measure_variant in '_channels' # TODO TODO '_videos' '_channels' # TODO TODO
 		do
 			if [[ "$measure_method" = 'frequency' ]] && [[ -n "$measure_variant" ]]
 			then
@@ -37,7 +36,7 @@ for task in mlsp
 				continue
 			fi
 			measure="${measure_method}${measure_variant}"
-			for transform_opt in '' # '--log-measure --smooth' ''
+			for transform_opt in '--log-measure --smooth' '' # '--sqrt-measure --zero-clip'
 			do
 				cache_opt=''
 				if [[ -n "$transform_opt" ]]
